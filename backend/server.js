@@ -66,6 +66,9 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
