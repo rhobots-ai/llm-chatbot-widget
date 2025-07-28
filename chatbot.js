@@ -16,8 +16,9 @@
     title: 'Chat Support',
     icon: 'https://rhobots.ai/images/icon.svg',
     maxHeight: '500px',
-    width: '350px',
-    zIndex: 10000
+    width: '500px',
+    zIndex: 10000,
+    view: 'bubble' // 'bubble' or 'sidesheet'
   };
 
   // Merge user config with defaults
@@ -40,8 +41,12 @@
   const styles = `
     .chatbot-widget-bubble {
       position: fixed;
-      ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
-      ${config.position.includes('bottom') ? 'bottom: 20px;' : 'top: 20px;'}
+      ${config.view === 'sidesheet' ? 
+        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') + 
+        'top: 50%; transform: translateY(-50%);' :
+        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') +
+        (config.position.includes('bottom') ? 'bottom: 20px;' : 'top: 20px;')
+      }
       width: 60px;
       height: 60px;
       background: ${config.primaryColor};
@@ -57,7 +62,7 @@
     }
 
     .chatbot-widget-bubble:hover {
-      transform: scale(1.1);
+      transform: ${config.view === 'sidesheet' ? 'translateY(-50%) scale(1.1)' : 'scale(1.1)'};
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
     }
 
@@ -69,12 +74,14 @@
 
     .chatbot-widget-window {
       position: fixed;
-      ${config.position.includes('right') ? 'right: 20px;' : 'left: 20px;'}
-      ${config.position.includes('bottom') ? 'bottom: 90px;' : 'top: 90px;'}
-      width: ${config.width};
-      max-height: ${config.maxHeight};
+      ${config.view === 'sidesheet' ? 
+        (config.position.includes('right') ? 'right: 0;' : 'left: 0;') +
+        'top: 0; height: 100vh; width: 400px; border-radius: 0;' :
+        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') +
+        (config.position.includes('bottom') ? 'bottom: 90px;' : 'top: 90px;') +
+        `width: ${config.width}; max-height: ${config.maxHeight}; border-radius: 12px;`
+      }
       background: white;
-      border-radius: 12px;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
       z-index: ${config.zIndex + 1};
       display: none;
@@ -83,7 +90,7 @@
       font-size: 14px;
       line-height: 1.4;
       overflow: hidden;
-      animation: chatbot-widget-slideIn 0.3s ease-out;
+      animation: ${config.view === 'sidesheet' ? 'chatbot-widget-slideInSide 0.3s ease-out' : 'chatbot-widget-slideIn 0.3s ease-out'};
     }
 
     @keyframes chatbot-widget-slideIn {
@@ -94,6 +101,17 @@
       to {
         opacity: 1;
         transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes chatbot-widget-slideInSide {
+      from {
+        opacity: 0;
+        transform: translateX(${config.position.includes('right') ? '100%' : '-100%'});
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
       }
     }
 
@@ -167,7 +185,7 @@
       flex: 1;
       padding: 20px;
       overflow-y: auto;
-      max-height: 300px;
+      max-height: ${config.view === 'sidesheet' ? 'none' : '300px'};
       display: flex;
       flex-direction: column;
       gap: 12px;
@@ -298,7 +316,7 @@
       flex: 1;
       padding: 20px;
       overflow-y: auto;
-      max-height: 300px;
+      max-height: ${config.view === 'sidesheet' ? 'none' : '300px'};
     }
 
     .chatbot-widget-history-item {
@@ -344,10 +362,16 @@
     /* Mobile responsiveness */
     @media (max-width: 480px) {
       .chatbot-widget-window {
-        width: calc(100vw - 40px);
-        max-width: none;
-        left: 20px !important;
-        right: 20px !important;
+        ${config.view === 'sidesheet' ? 
+          'width: 100vw !important; left: 0 !important; right: 0 !important;' :
+          'width: calc(100vw - 40px); max-width: none; left: 20px !important; right: 20px !important;'
+        }
+      }
+      
+      .chatbot-widget-bubble {
+        ${config.view === 'sidesheet' ? 
+          'right: 20px !important; left: auto !important;' : ''
+        }
       }
     }
   `;
