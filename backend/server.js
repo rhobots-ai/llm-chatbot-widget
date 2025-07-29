@@ -67,7 +67,14 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Serve static files from public directory
-app.use(express.static('public'));
+app.use(express.static('public', {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.set('Content-Type', 'application/javascript');
+      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+  }
+}));
 
 // Request logging middleware
 app.use((req, res, next) => {
