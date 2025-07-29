@@ -73,6 +73,10 @@ app.use(express.static('public', {
       res.set('Content-Type', 'application/javascript');
       res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     }
+    else if (path.endsWith('.css')) {
+      res.set('Content-Type', 'text/css');
+      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
   }
 }));
 
