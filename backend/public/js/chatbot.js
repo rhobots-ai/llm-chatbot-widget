@@ -568,45 +568,6 @@
     root.style.setProperty('--chatbot-max-height', config.maxHeight);
   }
 
-  // Fallback inline styles (minimal) if CSS file fails to load
-  function injectFallbackStyles() {
-    const styleSheet = document.createElement('style');
-    styleSheet.setAttribute('data-chatbot-widget-fallback', 'true');
-    styleSheet.textContent = `
-      .chatbot-widget-bubble {
-        position: fixed;
-        right: 20px;
-        bottom: 20px;
-        width: 60px;
-        height: 60px;
-        background: ${config.primaryColor};
-        border-radius: 50%;
-        cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: ${config.zIndex};
-        transition: all 0.3s ease;
-      }
-      .chatbot-widget-window {
-        position: fixed;
-        right: 20px;
-        bottom: 90px;
-        width: ${config.width};
-        max-height: ${config.maxHeight};
-        background: white;
-        border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-        z-index: ${config.zIndex + 1};
-        display: none;
-        flex-direction: column;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      }
-    `;
-    document.head.appendChild(styleSheet);
-  }
-
   // Create chat bubble
   function createChatBubble() {
     chatBubble = document.createElement('div');
