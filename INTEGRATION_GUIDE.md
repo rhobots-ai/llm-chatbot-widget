@@ -116,11 +116,12 @@ Configure the widget in your HTML:
 <script src="./chatbot.js" async></script>
 ```
 
-**Important**: The widget now uses external CSS for better CSP compliance. Make sure both `chatbot.js` and `chatbot.css` are accessible from the same directory. The widget will automatically load the CSS file from the same location as the JavaScript file.
+### CSP (Content Security Policy) Support
 
-### File Structure
+The widget now fully supports strict CSP policies with multiple fallback strategies:
 
-Your widget files should be organized like this:
+#### Option 1: External CSS (Preferred)
+The widget tries to load external CSS first. Ensure both files are accessible:
 
 ```
 your-website/
@@ -129,7 +130,71 @@ your-website/
 └── index.html      # Your page
 ```
 
-The widget automatically detects the CSS file location and loads it dynamically. If the CSS file fails to load, it falls back to minimal inline styles to ensure functionality.
+#### Option 2: CSP with Nonce Support
+For strict CSP environments, provide a nonce:
+
+```html
+<script>
+  window.ChatbotWidgetConfig = {
+    apiUrl: 'http://localhost:3000/api/chat',
+    nonce: 'your-csp-nonce-here', // CSP nonce for inline styles
+    primaryColor: '#4F46E5',
+    title: 'AI Assistant'
+  };
+</script>
+<script src="./chatbot.js" async nonce="your-csp-nonce-here"></script>
+```
+
+#### Option 3: Disable External CSS
+Force inline styles with nonce support:
+
+```html
+<script>
+  window.ChatbotWidgetConfig = {
+    apiUrl: 'http://localhost:3000/api/chat',
+    disableExternalCSS: true,
+    nonce: 'your-csp-nonce-here',
+    primaryColor: '#4F46E5'
+  };
+</script>
+```
+
+#### Option 4: Custom CSS URL
+Specify a custom CSS file location:
+
+```html
+<script>
+  window.ChatbotWidgetConfig = {
+    apiUrl: 'http://localhost:3000/api/chat',
+    cssUrl: 'https://your-cdn.com/chatbot.css',
+    primaryColor: '#4F46E5'
+  };
+</script>
+```
+
+### CSP Configuration Examples
+
+For your CSP header, you can use one of these approaches:
+
+**Option A: Allow external CSS (if serving from same domain)**
+```
+Content-Security-Policy: style-src 'self';
+```
+
+**Option B: Use nonces for inline styles**
+```
+Content-Security-Policy: style-src 'self' 'nonce-your-nonce-here';
+```
+
+**Option C: Allow specific external domains**
+```
+Content-Security-Policy: style-src 'self' https://your-cdn.com;
+```
+
+The widget automatically handles CSP compliance by:
+1. First trying external CSS (if allowed by CSP)
+2. Falling back to inline styles with nonce support
+3. Providing minimal fallback styles if all else fails
 
 ## 🚀 Deployment
 
