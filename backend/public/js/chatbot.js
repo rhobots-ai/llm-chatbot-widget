@@ -54,7 +54,7 @@
       for (let script of scripts) {
         if (script.src.includes('chatbot.js')) {
           const scriptUrl = new URL(script.src);
-          cssUrl = scriptUrl.href.replace('chatbot.js', 'chatbot.css');
+          cssUrl = scriptUrl.href.replace('js/chatbot.js', 'css/chatbot.css');
           break;
         }
       }
