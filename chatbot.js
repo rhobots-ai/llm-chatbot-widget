@@ -37,356 +37,115 @@
   // DOM elements
   let chatBubble, chatWindow, messagesContainer, messageInput, sendButton;
 
-  // CSS styles
-  const styles = `
-    .chatbot-widget-bubble {
-      position: fixed;
-      ${config.view === 'sidesheet' ? 
-        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') + 
-        'top: 50%; transform: translateY(-50%);' :
-        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') +
-        (config.position.includes('bottom') ? 'bottom: 20px;' : 'top: 20px;')
+  // Load external CSS file
+  function loadStyles() {
+    return new Promise((resolve, reject) => {
+      // Check if styles are already loaded
+      if (document.querySelector('link[data-chatbot-widget-styles]')) {
+        resolve();
+        return;
       }
-      width: 60px;
-      height: 60px;
-      background: ${config.primaryColor};
-      border-radius: 50%;
-      cursor: pointer;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: ${config.zIndex};
-      transition: all 0.3s ease;
-      user-select: none;
-    }
 
-    .chatbot-widget-bubble:hover {
-      transform: ${config.view === 'sidesheet' ? 'translateY(-50%) scale(1.1)' : 'scale(1.1)'};
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .chatbot-widget-bubble-icon {
-      width: 24px;
-      height: 24px;
-      fill: white;
-    }
-
-    .chatbot-widget-window {
-      position: fixed;
-      ${config.view === 'sidesheet' ? 
-        (config.position.includes('right') ? 'right: 0;' : 'left: 0;') +
-        'top: 0; height: 100vh; width: 400px; border-radius: 0;' :
-        (config.position.includes('right') ? 'right: 20px;' : 'left: 20px;') +
-        (config.position.includes('bottom') ? 'bottom: 90px;' : 'top: 90px;') +
-        `width: ${config.width}; max-height: ${config.maxHeight}; border-radius: 12px;`
-      }
-      background: white;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-      z-index: ${config.zIndex + 1};
-      display: none;
-      flex-direction: column;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 14px;
-      line-height: 1.4;
-      overflow: hidden;
-      animation: ${config.view === 'sidesheet' ? 'chatbot-widget-slideInSide 0.3s ease-out' : 'chatbot-widget-slideIn 0.3s ease-out'};
-    }
-
-    @keyframes chatbot-widget-slideIn {
-      from {
-        opacity: 0;
-        transform: translateY(20px) scale(0.95);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    @keyframes chatbot-widget-slideInSide {
-      from {
-        opacity: 0;
-        transform: translateX(${config.position.includes('right') ? '100%' : '-100%'});
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
-    }
-
-    .chatbot-widget-header {
-      background: ${config.primaryColor};
-      color: white;
-      padding: 16px 20px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-weight: 600;
-    }
-
-    .chatbot-widget-header-content {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .chatbot-widget-header-icon {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-    }
-
-    .chatbot-widget-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .chatbot-widget-header-btn {
-      background: none;
-      border: none;
-      color: white;
-      cursor: pointer;
-      font-size: 11px;
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-      opacity: 0.8;
-    }
-
-    .chatbot-widget-header-btn:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-      opacity: 1;
-    }
-
-    .chatbot-widget-close {
-      background: none;
-      border: none;
-      color: white;
-      cursor: pointer;
-      font-size: 18px;
-      padding: 0;
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 4px;
-      transition: background-color 0.2s;
-      margin-left: 4px;
-    }
-
-    .chatbot-widget-close:hover {
-      background-color: rgba(255, 255, 255, 0.1);
-    }
-
-    .chatbot-widget-messages {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      max-height: ${config.view === 'sidesheet' ? 'none' : '300px'};
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .chatbot-widget-message {
-      max-width: 80%;
-      padding: 12px 16px;
-      border-radius: 18px;
-      word-wrap: break-word;
-      animation: chatbot-widget-messageIn 0.3s ease-out;
-    }
-
-    @keyframes chatbot-widget-messageIn {
-      from {
-        opacity: 0;
-        transform: translateY(10px);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .chatbot-widget-message.user {
-      background: ${config.primaryColor};
-      color: white;
-      align-self: flex-end;
-      margin-left: auto;
-    }
-
-    .chatbot-widget-message.bot {
-      background: #f1f5f9;
-      color: #334155;
-      align-self: flex-start;
-    }
-
-    .chatbot-widget-typing {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      padding: 12px 16px;
-      background: #f1f5f9;
-      border-radius: 18px;
-      max-width: 80px;
-      align-self: flex-start;
-    }
-
-    .chatbot-widget-typing-dot {
-      width: 6px;
-      height: 6px;
-      background: #94a3b8;
-      border-radius: 50%;
-      animation: chatbot-widget-typing 1.4s infinite ease-in-out;
-    }
-
-    .chatbot-widget-typing-dot:nth-child(1) { animation-delay: -0.32s; }
-    .chatbot-widget-typing-dot:nth-child(2) { animation-delay: -0.16s; }
-
-    @keyframes chatbot-widget-typing {
-      0%, 80%, 100% {
-        transform: scale(0.8);
-        opacity: 0.5;
-      }
-      40% {
-        transform: scale(1);
-        opacity: 1;
-      }
-    }
-
-    .chatbot-widget-input-container {
-      padding: 20px;
-      border-top: 1px solid #e2e8f0;
-      display: flex;
-      gap: 12px;
-      align-items: flex-end;
-    }
-
-    .chatbot-widget-input {
-      flex: 1;
-      border: 1px solid #e2e8f0;
-      border-radius: 20px;
-      padding: 12px 16px;
-      font-size: 14px;
-      outline: none;
-      resize: none;
-      max-height: 100px;
-      min-height: 20px;
-      font-family: inherit;
-      transition: border-color 0.2s;
-    }
-
-    .chatbot-widget-input:focus {
-      border-color: ${config.primaryColor};
-    }
-
-    .chatbot-widget-send {
-      background: ${config.primaryColor};
-      border: none;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s;
-      flex-shrink: 0;
-    }
-
-    .chatbot-widget-send:hover {
-      transform: scale(1.05);
-    }
-
-    .chatbot-widget-send:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      transform: none;
-    }
-
-    .chatbot-widget-send-icon {
-      width: 16px;
-      height: 16px;
-      fill: white;
-    }
-
-    .chatbot-widget-history-view {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      max-height: ${config.view === 'sidesheet' ? 'none' : '300px'};
-    }
-
-    .chatbot-widget-history-item {
-      padding: 12px;
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      margin-bottom: 8px;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .chatbot-widget-history-item:hover {
-      background: #f8f9fa;
-      border-color: ${config.primaryColor};
-    }
-
-    .chatbot-widget-history-title {
-      font-weight: 600;
-      font-size: 13px;
-      color: #343a40;
-      margin-bottom: 4px;
-    }
-
-    .chatbot-widget-history-preview {
-      font-size: 12px;
-      color: #6c757d;
-      line-height: 1.3;
-    }
-
-    .chatbot-widget-history-date {
-      font-size: 11px;
-      color: #adb5bd;
-      margin-top: 4px;
-    }
-
-    .chatbot-widget-no-history {
-      text-align: center;
-      color: #6c757d;
-      font-size: 14px;
-      padding: 40px 20px;
-    }
-
-    /* Mobile responsiveness */
-    @media (max-width: 480px) {
-      .chatbot-widget-window {
-        ${config.view === 'sidesheet' ? 
-          'width: 100vw !important; left: 0 !important; right: 0 !important;' :
-          'width: calc(100vw - 40px); max-width: none; left: 20px !important; right: 20px !important;'
-        }
-      }
+      // Try to determine the base URL for the CSS file
+      let cssUrl = 'chatbot.css'; // Default relative path
       
-      .chatbot-widget-bubble {
-        ${config.view === 'sidesheet' ? 
-          'right: 20px !important; left: auto !important;' : ''
+      // If we can find the script tag that loaded this widget, use its path
+      const scripts = document.querySelectorAll('script[src]');
+      for (let script of scripts) {
+        if (script.src.includes('chatbot.js')) {
+          const scriptUrl = new URL(script.src);
+          cssUrl = scriptUrl.href.replace('chatbot.js', 'chatbot.css');
+          break;
         }
       }
-    }
-  `;
 
-  // Inject CSS
-  function injectStyles() {
+      // Create and load the CSS file
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.type = 'text/css';
+      link.href = cssUrl;
+      link.setAttribute('data-chatbot-widget-styles', 'true');
+      
+      link.onload = () => {
+        // Set CSS custom properties for theming
+        setCSSVariables();
+        resolve();
+      };
+      
+      link.onerror = () => {
+        console.warn('Failed to load chatbot CSS, falling back to inline styles');
+        // Fallback to minimal inline styles if CSS file fails to load
+        injectFallbackStyles();
+        resolve();
+      };
+      
+      document.head.appendChild(link);
+    });
+  }
+
+  // Set CSS custom properties for dynamic theming
+  function setCSSVariables() {
+    const root = document.documentElement;
+    root.style.setProperty('--chatbot-primary-color', config.primaryColor);
+    root.style.setProperty('--chatbot-z-index', config.zIndex);
+    root.style.setProperty('--chatbot-width', config.width);
+    root.style.setProperty('--chatbot-max-height', config.maxHeight);
+  }
+
+  // Fallback inline styles (minimal) if CSS file fails to load
+  function injectFallbackStyles() {
     const styleSheet = document.createElement('style');
-    styleSheet.textContent = styles;
+    styleSheet.setAttribute('data-chatbot-widget-fallback', 'true');
+    styleSheet.textContent = `
+      .chatbot-widget-bubble {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        width: 60px;
+        height: 60px;
+        background: ${config.primaryColor};
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: ${config.zIndex};
+        transition: all 0.3s ease;
+      }
+      .chatbot-widget-window {
+        position: fixed;
+        right: 20px;
+        bottom: 90px;
+        width: ${config.width};
+        max-height: ${config.maxHeight};
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+        z-index: ${config.zIndex + 1};
+        display: none;
+        flex-direction: column;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+    `;
     document.head.appendChild(styleSheet);
   }
 
   // Create chat bubble
   function createChatBubble() {
     chatBubble = document.createElement('div');
-    chatBubble.className = 'chatbot-widget-bubble';
+    
+    // Add base class and position/view classes
+    let bubbleClasses = ['chatbot-widget-bubble'];
+    bubbleClasses.push(`view-${config.view}`);
+    
+    if (config.view === 'sidesheet') {
+      bubbleClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+    } else {
+      bubbleClasses.push(`position-${config.position}`);
+    }
+    
+    chatBubble.className = bubbleClasses.join(' ');
     chatBubble.innerHTML = `
       <svg class="chatbot-widget-bubble-icon" viewBox="0 0 24 24">
         <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
@@ -400,7 +159,18 @@
   // Create chat window
   function createChatWindow() {
     chatWindow = document.createElement('div');
-    chatWindow.className = 'chatbot-widget-window';
+    
+    // Add base class and position/view classes
+    let windowClasses = ['chatbot-widget-window'];
+    windowClasses.push(`view-${config.view}`);
+    
+    if (config.view === 'sidesheet') {
+      windowClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+    } else {
+      windowClasses.push(`position-${config.position}`);
+    }
+    
+    chatWindow.className = windowClasses.join(' ');
     
     chatWindow.innerHTML = `
       <div class="chatbot-widget-header">
@@ -792,16 +562,24 @@
   }
 
   // Initialize widget
-  function init() {
+  async function init() {
     // Wait for DOM to be ready
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', init);
       return;
     }
 
-    injectStyles();
-    createChatBubble();
-    createChatWindow();
+    // Load styles first, then create the widget elements
+    try {
+      await loadStyles();
+      createChatBubble();
+      createChatWindow();
+    } catch (error) {
+      console.error('Failed to initialize chatbot widget:', error);
+      // Still try to create the widget with fallback styles
+      createChatBubble();
+      createChatWindow();
+    }
   }
 
   // Public API

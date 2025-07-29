@@ -116,6 +116,21 @@ Configure the widget in your HTML:
 <script src="./chatbot.js" async></script>
 ```
 
+**Important**: The widget now uses external CSS for better CSP compliance. Make sure both `chatbot.js` and `chatbot.css` are accessible from the same directory. The widget will automatically load the CSS file from the same location as the JavaScript file.
+
+### File Structure
+
+Your widget files should be organized like this:
+
+```
+your-website/
+├── chatbot.js      # Widget JavaScript
+├── chatbot.css     # Widget styles (auto-loaded)
+└── index.html      # Your page
+```
+
+The widget automatically detects the CSS file location and loads it dynamically. If the CSS file fails to load, it falls back to minimal inline styles to ensure functionality.
+
 ## 🚀 Deployment
 
 ### Option 1: Vercel (Recommended)
