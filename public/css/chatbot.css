@@ -425,20 +425,41 @@
 /* Mobile responsiveness */
 @media (max-width: 480px) {
   .chatbot-widget-window.view-bubble {
-    width: calc(100vw - 40px) !important;
-    max-width: none;
-    left: 20px !important;
-    right: 20px !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    border-radius: 0 !important;
   }
   
   .chatbot-widget-window.view-sidesheet {
     width: 100vw !important;
+    height: 100vh !important;
+    top: 0 !important;
     left: 0 !important;
     right: 0 !important;
+    bottom: 0 !important;
+    border-radius: 0 !important;
   }
   
   .chatbot-widget-bubble.view-sidesheet {
     right: 20px !important;
     left: auto !important;
+  }
+  
+  /* Ensure messages container takes available space in full-screen */
+  .chatbot-widget-messages {
+    max-height: none !important;
+    flex: 1 !important;
+  }
+  
+  /* Ensure history view also takes full available space */
+  .chatbot-widget-history-view {
+    max-height: none !important;
+    flex: 1 !important;
   }
 }
