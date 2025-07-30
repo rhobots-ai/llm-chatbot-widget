@@ -225,9 +225,8 @@
     <!-- Chatbot Widget Configuration -->
     <script>
         window.ChatbotWidgetConfig = {
-            // apiUrl: 'http://localhost:3000/api/chat',
-            apiUrl: 'https://llm-bot.progfin.com/api/chat',
-            primaryColor: '#6c757d',
+            apiUrl: 'http://localhost:3000/api/chat',
+            primaryColor: '#4F46E5',
             position: 'bottom-right',
             title: 'AI Assistant Demo',
             icon: 'https://rhobots.ai/images/icon.svg',
@@ -235,7 +234,7 @@
             placeholder: 'Type your message here...',
             width: '350px',
             maxHeight: '500px',
-            // New OpenAI-specific options
+            view: 'sidesheet',
             assistantType: 'default', // Maps to backend assistant configuration
             provider: 'openai' // AI provider to use
         };
