@@ -1076,8 +1076,8 @@
     
     try {
       // Get user ID (using IP as user identifier for now)
-      // const userId = '::ffff:127.0.0.1';
-      const userId = '::1';
+      const userId = '::ffff:127.0.0.1';
+      // const userId = '::1';
       
       // Fetch conversations from backend
       const apiBaseUrl = config.apiUrl.replace('/chat', '');
