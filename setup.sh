@@ -27,9 +27,6 @@ fi
 echo "✅ Node.js $(node -v) detected"
 echo ""
 
-# Navigate to backend directory
-cd backend
-
 echo "📦 Installing backend dependencies..."
 npm install
 
@@ -45,13 +42,13 @@ fi
 # Copy example environment file
 cp .env.example .env
 
-echo "✅ Environment file created at backend/.env"
+echo "✅ Environment file created at ./.env"
 echo ""
 
 echo "🔑 IMPORTANT: You need to configure your OpenAI credentials"
 echo "   1. Get your OpenAI API key from: https://platform.openai.com/api-keys"
 echo "   2. Create an OpenAI Assistant at: https://platform.openai.com/assistants"
-echo "   3. Edit backend/.env and add your credentials:"
+echo "   3. Edit ./.env and add your credentials:"
 echo ""
 echo "      OPENAI_API_KEY=your_api_key_here"
 echo "      OPENAI_ASSISTANT_ID=your_assistant_id_here"
@@ -73,21 +70,20 @@ if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "Opening .env in vim..."
         vim .env
     else
-        echo "Please edit backend/.env manually with your preferred editor"
+        echo "Please edit ./.env manually with your preferred editor"
     fi
 fi
 
 echo ""
 echo "🚀 Setup complete! Next steps:"
 echo ""
-echo "1. Configure your OpenAI credentials in backend/.env"
+echo "1. Configure your OpenAI credentials in ./.env"
 echo "2. Start the backend server:"
-echo "   cd backend && npm run dev"
+echo "   npm run dev"
 echo ""
 echo "3. Open demo.html in your browser to test the widget"
 echo ""
 echo "📚 For more information:"
-echo "   - Backend documentation: backend/README.md"
 echo "   - Main documentation: README.md"
 echo ""
 echo "✨ Happy chatting!"
