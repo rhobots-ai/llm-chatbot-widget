@@ -304,7 +304,7 @@
       .chatbot-widget-header-actions {
         display: flex;
         align-items: center;
-        gap: 4px;
+        gap: 2px;
       }
 
       .chatbot-widget-header-btn {
@@ -312,11 +312,21 @@
         border: none;
         color: white;
         cursor: pointer;
-        font-size: 11px;
-        padding: 4px 8px;
+        font-size: 10px;
+        padding: 3px 6px;
         border-radius: 4px;
         transition: background-color 0.2s;
         opacity: 0.8;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+      }
+
+      .chatbot-widget-header-btn svg {
+        width: 12px;
+        height: 12px;
       }
 
       .chatbot-widget-header-btn:hover {
@@ -616,8 +626,21 @@
           <span>${config.title}</span>
         </div>
         <div class="chatbot-widget-header-actions">
-          <button class="chatbot-widget-header-btn" id="chatbot-new-conversation">New</button>
-          <button class="chatbot-widget-header-btn" id="chatbot-show-history">History</button>
+          <button class="chatbot-widget-header-btn" id="chatbot-new-conversation" title="New Conversation">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+            </svg>
+          </button>
+          <button class="chatbot-widget-header-btn" id="chatbot-show-history" title="Conversation History">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
+            </svg>
+          </button>
+          <button class="chatbot-widget-header-btn" id="chatbot-toggle-view" title="Toggle View">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
+            </svg>
+          </button>
           <button class="chatbot-widget-close" type="button">×</button>
         </div>
       </div>
@@ -646,6 +669,10 @@
     // Action button listeners
     chatWindow.querySelector('#chatbot-new-conversation').addEventListener('click', startNewConversation);
     chatWindow.querySelector('#chatbot-show-history').addEventListener('click', toggleHistoryView);
+    chatWindow.querySelector('#chatbot-toggle-view').addEventListener('click', toggleView);
+
+    // Initialize toggle button icon
+    updateToggleButtonIcon();
 
     document.body.appendChild(chatWindow);
   }
@@ -852,7 +879,11 @@
     messagesContainer.style.display = 'flex';
     chatWindow.querySelector('.chatbot-widget-history-view').style.display = 'none';
     chatWindow.querySelector('.chatbot-widget-input-container').style.display = 'flex';
-    chatWindow.querySelector('#chatbot-show-history').textContent = 'History';
+    
+    // Update history button icon and title
+    const historyButton = chatWindow.querySelector('#chatbot-show-history');
+    historyButton.title = 'Conversation History';
+    historyButton.querySelector('svg').innerHTML = '<path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>';
   }
 
   // Show history view
@@ -866,7 +897,11 @@
     
     const historyView = chatWindow.querySelector('.chatbot-widget-history-view');
     historyView.style.display = 'block';
-    chatWindow.querySelector('#chatbot-show-history').textContent = 'Back to Chat';
+    
+    // Update history button icon and title to show "back" state
+    const historyButton = chatWindow.querySelector('#chatbot-show-history');
+    historyButton.title = 'Back to Chat';
+    historyButton.querySelector('svg').innerHTML = '<path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>';
     
     await renderHistoryList();
   }
@@ -996,6 +1031,53 @@
     showChatView();
     scrollToBottom();
     messageInput.focus();
+  }
+
+  // Toggle view between bubble and sidesheet
+  function toggleView() {
+    // Switch the view
+    config.view = config.view === 'bubble' ? 'sidesheet' : 'bubble';
+    
+    // Update bubble classes
+    updateElementClasses(chatBubble);
+    
+    // Update window classes
+    updateElementClasses(chatWindow);
+    
+    // Update toggle button icon
+    updateToggleButtonIcon();
+  }
+
+  // Update element classes based on current view
+  function updateElementClasses(element) {
+    // Remove old view classes
+    element.classList.remove('view-bubble', 'view-sidesheet');
+    element.classList.remove('position-bottom-right', 'position-bottom-left', 'position-top-right', 'position-top-left');
+    element.classList.remove('position-right', 'position-left');
+    
+    // Add new view class
+    element.classList.add(`view-${config.view}`);
+    
+    // Add appropriate position classes
+    if (config.view === 'sidesheet') {
+      element.classList.add(config.position.includes('right') ? 'position-right' : 'position-left');
+    } else {
+      element.classList.add(`position-${config.position}`);
+    }
+  }
+
+  // Update toggle button icon based on current view
+  function updateToggleButtonIcon() {
+    const toggleButton = chatWindow.querySelector('#chatbot-toggle-view');
+    const svg = toggleButton.querySelector('svg');
+    
+    if (config.view === 'bubble') {
+      // Show sidesheet icon (expand/sidebar icon)
+      svg.innerHTML = '<path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>';
+    } else {
+      // Show bubble icon (compress/window icon)
+      svg.innerHTML = '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>';
+    }
   }
 
   // Initialize widget
