@@ -401,6 +401,106 @@
         align-self: flex-start;
       }
 
+      /* Markdown styles for bot messages */
+      .chatbot-widget-message.bot p {
+        margin: 0 0 8px 0;
+        line-height: 1.5;
+      }
+
+      .chatbot-widget-message.bot p:last-child {
+        margin-bottom: 0;
+      }
+
+      .chatbot-widget-message.bot strong {
+        font-weight: 600;
+        color: #1e293b;
+      }
+
+      .chatbot-widget-message.bot em {
+        font-style: italic;
+        color: #475569;
+      }
+
+      .chatbot-widget-message.bot code {
+        background: #e2e8f0;
+        color: #1e293b;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.85em;
+      }
+
+      .chatbot-widget-message.bot pre {
+        background: #1e293b;
+        color: #e2e8f0;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 8px 0;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.85em;
+        line-height: 1.4;
+      }
+
+      .chatbot-widget-message.bot pre code {
+        background: none;
+        color: inherit;
+        padding: 0;
+        border-radius: 0;
+        font-size: inherit;
+      }
+
+      .chatbot-widget-message.bot ul,
+      .chatbot-widget-message.bot ol {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+
+      .chatbot-widget-message.bot li {
+        margin: 4px 0;
+        line-height: 1.4;
+      }
+
+      .chatbot-widget-message.bot h1,
+      .chatbot-widget-message.bot h2,
+      .chatbot-widget-message.bot h3 {
+        margin: 12px 0 8px 0;
+        font-weight: 600;
+        color: #1e293b;
+        line-height: 1.3;
+      }
+
+      .chatbot-widget-message.bot h1 {
+        font-size: 1.25em;
+      }
+
+      .chatbot-widget-message.bot h2 {
+        font-size: 1.15em;
+      }
+
+      .chatbot-widget-message.bot h3 {
+        font-size: 1.1em;
+      }
+
+      .chatbot-widget-message.bot a {
+        color: var(--chatbot-primary-color, ${config.primaryColor});
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s;
+      }
+
+      .chatbot-widget-message.bot a:hover {
+        border-bottom-color: var(--chatbot-primary-color, ${config.primaryColor});
+      }
+
+      .chatbot-widget-message.bot blockquote {
+        border-left: 3px solid var(--chatbot-primary-color, ${config.primaryColor});
+        padding-left: 12px;
+        margin: 8px 0;
+        color: #64748b;
+        font-style: italic;
+      }
+
       .chatbot-widget-typing {
         display: flex;
         align-items: center;
@@ -768,11 +868,72 @@
     }
   }
 
+  // Simple markdown parser for common elements
+  function parseMarkdown(text) {
+    // Escape HTML to prevent XSS
+    text = text.replace(/&/g, '&amp;')
+               .replace(/</g, '&lt;')
+               .replace(/>/g, '&gt;')
+               .replace(/"/g, '&quot;')
+               .replace(/'/g, '&#39;');
+
+    // Parse markdown elements
+    // Bold text **text** or __text__
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
+    
+    // Italic text *text* or _text_
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+
+    // Code blocks ```code```
+    text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    
+    // Inline code `code`
+    text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Links [text](url)
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    
+    // Line breaks (double newline becomes paragraph break)
+    text = text.replace(/\n\n/g, '</p><p>');
+    text = '<p>' + text + '</p>';
+    
+    // Single line breaks become <br>
+    text = text.replace(/\n/g, '<br>');
+    
+    // Handle lists
+    // Unordered lists - * item or - item
+    text = text.replace(/^[\*\-]\s+(.+)$/gm, '<li>$1</li>');
+    text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    
+    // Ordered lists - 1. item
+    text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+    // This is a simple approach - in practice you'd want more sophisticated list handling
+    
+    // Headers
+    text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+    text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+    text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+    
+    // Clean up empty paragraphs
+    text = text.replace(/<p><\/p>/g, '');
+    text = text.replace(/<p>\s*<\/p>/g, '');
+    
+    return text;
+  }
+
   // Add message to chat
   function addMessage(text, sender) {
     const messageElement = document.createElement('div');
     messageElement.className = `chatbot-widget-message ${sender}`;
-    messageElement.textContent = text;
+    
+    // Parse markdown for bot messages, keep plain text for user messages
+    if (sender === 'bot') {
+      messageElement.innerHTML = parseMarkdown(text);
+    } else {
+      messageElement.textContent = text;
+    }
     
     messagesContainer.appendChild(messageElement);
     messageHistory.push({ text, sender, timestamp: Date.now() });
@@ -915,7 +1076,8 @@
     
     try {
       // Get user ID (using IP as user identifier for now)
-      const userId = '::ffff:127.0.0.1'; // You can make this more sophisticated
+      // const userId = '::ffff:127.0.0.1';
+      const userId = '::1';
       
       // Fetch conversations from backend
       const apiBaseUrl = config.apiUrl.replace('/chat', '');
@@ -992,7 +1154,14 @@
       messageHistory.forEach(msg => {
         const messageElement = document.createElement('div');
         messageElement.className = `chatbot-widget-message ${msg.sender}`;
-        messageElement.textContent = msg.text;
+        
+        // Parse markdown for bot messages, keep plain text for user messages
+        if (msg.sender === 'bot') {
+          messageElement.innerHTML = parseMarkdown(msg.text);
+        } else {
+          messageElement.textContent = msg.text;
+        }
+        
         messagesContainer.appendChild(messageElement);
       });
       
@@ -1023,7 +1192,14 @@
     messageHistory.forEach(msg => {
       const messageElement = document.createElement('div');
       messageElement.className = `chatbot-widget-message ${msg.sender}`;
-      messageElement.textContent = msg.text;
+      
+      // Parse markdown for bot messages, keep plain text for user messages
+      if (msg.sender === 'bot') {
+        messageElement.innerHTML = parseMarkdown(msg.text);
+      } else {
+        messageElement.textContent = msg.text;
+      }
+      
       messagesContainer.appendChild(messageElement);
     });
     
