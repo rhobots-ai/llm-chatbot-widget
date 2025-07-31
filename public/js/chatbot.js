@@ -47,7 +47,7 @@
       }
 
       const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js';
+      script.src = './marked.umd.js';
       script.onload = () => {
         // Configure marked for security
         if (window.marked && window.marked.setOptions) {
