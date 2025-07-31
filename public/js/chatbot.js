@@ -37,6 +37,42 @@
   // DOM elements
   let chatBubble, chatWindow, messagesContainer, messageInput, sendButton;
 
+  // Load marked library
+  function loadMarkedLibrary() {
+    return new Promise((resolve, reject) => {
+      // Check if marked is already loaded
+      if (window.marked) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/marked/lib/marked.umd.js';
+      script.onload = () => {
+        // Configure marked for security
+        if (window.marked && window.marked.setOptions) {
+          window.marked.setOptions({
+            sanitize: false, // We'll handle sanitization ourselves
+            breaks: true,    // Convert \n to <br>
+            gfm: true       // GitHub Flavored Markdown
+          });
+        }
+        resolve();
+      };
+      script.onerror = () => {
+        console.warn('Failed to load marked library, falling back to simple parsing');
+        resolve(); // Don't reject, we'll use fallback
+      };
+      
+      // Apply nonce if provided for CSP compliance
+      if (config.nonce) {
+        script.setAttribute('nonce', config.nonce);
+      }
+      
+      document.head.appendChild(script);
+    });
+  }
+
   // Load external CSS file with CSP support
   function loadStyles() {
     return new Promise((resolve, reject) => {
@@ -868,8 +904,59 @@
     }
   }
 
-  // Simple markdown parser for common elements
+  // HTML sanitization function to prevent XSS
+  function sanitizeHtml(html) {
+    // Create a temporary div to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Remove script tags and event handlers
+    const scripts = temp.querySelectorAll('script');
+    scripts.forEach(script => script.remove());
+    
+    // Remove dangerous attributes
+    const allElements = temp.querySelectorAll('*');
+    allElements.forEach(element => {
+      // Remove event handler attributes
+      Array.from(element.attributes).forEach(attr => {
+        if (attr.name.startsWith('on')) {
+          element.removeAttribute(attr.name);
+        }
+      });
+      
+      // Only allow safe attributes for links
+      if (element.tagName === 'A') {
+        const href = element.getAttribute('href');
+        element.removeAttribute('href');
+        if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:'))) {
+          element.setAttribute('href', href);
+          element.setAttribute('target', '_blank');
+          element.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+    });
+    
+    return temp.innerHTML;
+  }
+
+  // Markdown parser using marked library with fallback
   function parseMarkdown(text) {
+    try {
+      // Use marked library if available
+      if (window.marked && typeof window.marked.parse === 'function') {
+        const html = window.marked.parse(text);
+        return sanitizeHtml(html);
+      }
+    } catch (error) {
+      console.warn('Error using marked library, falling back to simple parser:', error);
+    }
+    
+    // Fallback to simple markdown parsing
+    return parseMarkdownSimple(text);
+  }
+
+  // Simple fallback markdown parser
+  function parseMarkdownSimple(text) {
     // Escape HTML to prevent XSS
     text = text.replace(/&/g, '&amp;')
                .replace(/</g, '&lt;')
@@ -884,7 +971,6 @@
     
     // Italic text *text* or _text_
     text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    // More restrictive underscore italic pattern to avoid matching SQL columns and identifiers
     text = text.replace(/\b_([^\s_]+)_\b/g, '<em>$1</em>');
 
     // Code blocks ```code```
@@ -904,13 +990,11 @@
     text = text.replace(/\n/g, '<br>');
     
     // Handle lists
-    // Unordered lists - * item or - item
     text = text.replace(/^[\*\-]\s+(.+)$/gm, '<li>$1</li>');
     text = text.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     
-    // Ordered lists - 1. item
+    // Ordered lists
     text = text.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
-    // This is a simple approach - in practice you'd want more sophisticated list handling
     
     // Headers
     text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
@@ -1265,14 +1349,19 @@
       return;
     }
 
-    // Load styles first, then create the widget elements
+    // Load dependencies and create the widget elements
     try {
-      await loadStyles();
+      // Load styles and marked library in parallel
+      await Promise.all([
+        loadStyles(),
+        loadMarkedLibrary()
+      ]);
+      
       createChatBubble();
       createChatWindow();
     } catch (error) {
       console.error('Failed to initialize chatbot widget:', error);
-      // Still try to create the widget with fallback styles
+      // Still try to create the widget with fallback
       createChatBubble();
       createChatWindow();
     }
