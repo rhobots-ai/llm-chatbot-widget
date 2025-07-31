@@ -10,6 +10,10 @@ const providerFactory = require('./providers');
 const conversationManager = require('./utils/conversation');
 const { validateChatRequest, createErrorResponse } = require('./utils/validation');
 
+// Import SQL API components
+const postgresManager = require('./utils/postgres');
+const sqlApiRoutes = require('./routes/sql-api');
+
 // Create Express app
 const app = express();
 
@@ -86,6 +90,9 @@ app.use((req, res, next) => {
   console.log(`${timestamp} ${req.method} ${req.path} - ${req.ip}`);
   next();
 });
+
+// Mount SQL API routes
+app.use('/api/sql', sqlApiRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -444,16 +451,36 @@ async function cleanup() {
 // Run cleanup every hour
 setInterval(cleanup, 60 * 60 * 1000);
 
+// Initialize PostgreSQL connection (optional - will only initialize if env vars are present)
+async function initializePostgreSQL() {
+  try {
+    await postgresManager.initialize();
+    console.log('🐘 PostgreSQL connection initialized successfully');
+  } catch (error) {
+    console.warn('⚠️ PostgreSQL initialization failed:', error.message);
+    console.warn('💡 SQL API endpoints will not be available until PostgreSQL is configured');
+  }
+}
+
 // Start server
 const PORT = config.port;
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log('🚀 Chatbot Widget Backend Server Started');
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`🔑 OpenAI configured: ${!!config.openai.apiKey}`);
   console.log(`🤖 Default Assistant: ${config.openai.defaultAssistantId || 'Not configured'}`);
   console.log(`🛡️ CORS origins: ${config.cors.allowedOrigins.join(', ')}`);
+  
+  // Initialize PostgreSQL
+  await initializePostgreSQL();
+  
   console.log('✅ Ready to handle chat requests!');
+  console.log('🔗 Available endpoints:');
+  console.log('   - POST /api/chat (Chat API)');
+  console.log('   - POST /api/sql/execute (SQL Query Execution)');
+  console.log('   - GET  /api/sql/test (Database Connection Test)');
+  console.log('   - GET  /api/sql/docs (SQL API Documentation)');
 });
 
 // Graceful shutdown
@@ -461,6 +488,7 @@ process.on('SIGTERM', async () => {
   console.log('🛑 SIGTERM received, shutting down gracefully...');
   await cleanup();
   await conversationManager.close();
+  await postgresManager.close();
   process.exit(0);
 });
 
@@ -468,5 +496,6 @@ process.on('SIGINT', async () => {
   console.log('🛑 SIGINT received, shutting down gracefully...');
   await cleanup();
   await conversationManager.close();
+  await postgresManager.close();
   process.exit(0);
 });
