@@ -19,7 +19,7 @@ const DANGEROUS_KEYWORDS = [
   // Transaction control
   'BEGIN', 'COMMIT', 'ROLLBACK', 'SAVEPOINT',
   // Database structure
-  'DESCRIBE', 'DESC', 'EXPLAIN', 'ANALYZE',
+  'DESCRIBE', 'EXPLAIN', 'ANALYZE',
   // PostgreSQL specific dangerous functions
   'PG_READ_FILE', 'PG_WRITE_FILE', 'PG_EXECUTE',
   // System catalogs (partial list)

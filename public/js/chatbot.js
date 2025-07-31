@@ -954,7 +954,7 @@
     return parseMarkdownSimple(text);
   }
 
-  // Enhance code blocks with copy functionality
+  // Enhance code blocks with copy functionality and SQL run button
   function enhanceCodeBlocks(html) {
     // Create a temporary div to parse HTML
     const temp = document.createElement('div');
@@ -978,20 +978,43 @@
       // Get the code content
       const codeContent = code.textContent || code.innerText || '';
       
+      // Check if this is a SQL code block
+      const isSQLBlock = ['sql', 'postgres', 'postgresql', 'mysql', 'sqlite'].includes(language.toLowerCase());
+      
       // Create enhanced code block structure
       const codeBlockId = `chatbot-code-${Date.now()}-${index}`;
       const enhancedCodeBlock = document.createElement('div');
       enhancedCodeBlock.className = 'chatbot-code-block';
+      
+      // Create header buttons HTML
+      let headerButtons = `
+        <button class="chatbot-code-copy" data-code-id="${codeBlockId}" title="Copy code">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+          </svg>
+        </button>
+      `;
+      
+      // Add run button for SQL blocks
+      if (isSQLBlock) {
+        headerButtons = `
+          <button class="chatbot-code-run" data-code-id="${codeBlockId}" title="Run SQL query">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+        ` + headerButtons;
+      }
+      
       enhancedCodeBlock.innerHTML = `
         <div class="chatbot-code-header">
           <span class="chatbot-code-language">${language}</span>
-          <button class="chatbot-code-copy" data-code-id="${codeBlockId}" title="Copy code">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
-            </svg>
-          </button>
+          <div class="chatbot-code-actions">
+            ${headerButtons}
+          </div>
         </div>
         <pre class="chatbot-code-content" id="${codeBlockId}"><code>${codeContent}</code></pre>
+        <div class="chatbot-sql-results" id="${codeBlockId}-results" style="display: none;"></div>
       `;
       
       // Replace the original pre element
@@ -1132,6 +1155,209 @@
     }
   }
 
+  // Execute SQL query
+  async function executeSQLQuery(codeId, button) {
+    try {
+      const codeElement = document.getElementById(codeId);
+      if (!codeElement) {
+        console.error('Code element not found:', codeId);
+        return;
+      }
+      
+      const codeContent = codeElement.querySelector('code');
+      const sqlQuery = codeContent ? codeContent.textContent.trim() : '';
+      
+      if (!sqlQuery) {
+        console.error('No SQL query found');
+        return;
+      }
+      
+      // Show loading state
+      const originalContent = button.innerHTML;
+      button.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" fill="none"/>
+        </svg>
+      `;
+      button.disabled = true;
+      button.style.color = '#6b7280';
+      
+      // Get results container
+      const resultsContainer = document.getElementById(`${codeId}-results`);
+      if (resultsContainer) {
+        resultsContainer.style.display = 'none';
+        resultsContainer.innerHTML = '';
+      }
+      
+      // Determine SQL API URL
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const sqlApiUrl = `${apiBaseUrl}/sql/execute`;
+      
+      // Execute SQL query
+      const response = await fetch(sqlApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          query: sqlQuery,
+          timeout: 30000,
+          limit: 100
+        })
+      });
+      
+      const result = await response.json();
+      
+      // Reset button
+      button.innerHTML = originalContent;
+      button.disabled = false;
+      button.style.color = '';
+      
+      if (response.ok && result.success) {
+        // Show successful results
+        showSQLResults(result, codeId);
+      } else {
+        // Show error with fix button
+        const errorMessage = result.message + ': ' + result.details?.[0] || 'Unknown SQL error';
+        showSQLError(errorMessage, sqlQuery, codeId);
+      }
+      
+    } catch (error) {
+      console.error('SQL execution error:', error);
+      
+      // Reset button
+      const originalContent = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      `;
+      button.innerHTML = originalContent;
+      button.disabled = false;
+      button.style.color = '';
+      
+      // Show error
+      const codeElement = document.getElementById(codeId);
+      const codeContent = codeElement?.querySelector('code');
+      const sqlQuery = codeContent ? codeContent.textContent.trim() : '';
+      showSQLError(error.message || 'Failed to execute SQL query', sqlQuery, codeId);
+    }
+  }
+
+  // Show SQL results
+  function showSQLResults(result, codeId) {
+    const resultsContainer = document.getElementById(`${codeId}-results`);
+    if (!resultsContainer) return;
+    
+    const { data, rowCount, executionTime, truncated } = result;
+    
+    let resultsHTML = `
+      <div class="chatbot-sql-results-header">
+        <div class="chatbot-sql-results-info">
+          <span class="chatbot-sql-success-icon">✓</span>
+          <span>Query executed successfully</span>
+          <span class="chatbot-sql-meta">${rowCount} rows in ${executionTime}ms</span>
+        </div>
+        <button class="chatbot-sql-toggle" onclick="this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display = this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display === 'none' ? 'block' : 'none'; this.textContent = this.textContent === '▼' ? '▲' : '▼';">▼</button>
+      </div>
+      <div class="chatbot-sql-results-content">
+    `;
+    
+    if (data && data.length > 0) {
+      // Create table
+      const columns = Object.keys(data[0]);
+      resultsHTML += `
+        <div class="chatbot-sql-table-container">
+          <table class="chatbot-sql-table">
+            <thead>
+              <tr>
+                ${columns.map(col => `<th>${col}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${data.map(row => `
+                <tr>
+                  ${columns.map(col => `<td>${row[col] !== null ? String(row[col]) : '<em>null</em>'}</td>`).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+      
+      if (truncated) {
+        resultsHTML += `<div class="chatbot-sql-warning">Results truncated to ${data.length} rows</div>`;
+      }
+    } else {
+      resultsHTML += `<div class="chatbot-sql-empty">No data returned</div>`;
+    }
+    
+    resultsHTML += `</div>`;
+    
+    resultsContainer.innerHTML = resultsHTML;
+    resultsContainer.style.display = 'block';
+  }
+
+  // Show SQL error with fix button
+  function showSQLError(errorMessage, originalQuery, codeId) {
+    const resultsContainer = document.getElementById(`${codeId}-results`);
+    if (!resultsContainer) return;
+    
+    const resultsHTML = `
+      <div class="chatbot-sql-results-header chatbot-sql-error-header">
+        <div class="chatbot-sql-results-info">
+          <span class="chatbot-sql-error-icon">✗</span>
+          <span>Query failed</span>
+        </div>
+        <button class="chatbot-sql-toggle" onclick="this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display = this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display === 'none' ? 'block' : 'none'; this.textContent = this.textContent === '▼' ? '▲' : '▼';">▼</button>
+      </div>
+      <div class="chatbot-sql-results-content">
+        <div class="chatbot-sql-error-message">${errorMessage}</div>
+        <div class="chatbot-sql-error-actions">
+          <button class="chatbot-sql-fix-btn" data-error="${encodeURIComponent(errorMessage)}" data-query="${encodeURIComponent(originalQuery)}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            Fix Error
+          </button>
+        </div>
+      </div>
+    `;
+    
+    resultsContainer.innerHTML = resultsHTML;
+    resultsContainer.style.display = 'block';
+    
+    // Add event listener for fix button
+    const fixButton = resultsContainer.querySelector('.chatbot-sql-fix-btn');
+    if (fixButton) {
+      fixButton.addEventListener('click', () => {
+        const error = decodeURIComponent(fixButton.getAttribute('data-error'));
+        const query = decodeURIComponent(fixButton.getAttribute('data-query'));
+        handleFixError(error, query);
+      });
+    }
+  }
+
+  // Handle fix error - send error context to chat
+  function handleFixError(errorMessage, originalQuery) {
+    const fixMessage = `I got this SQL error: "${errorMessage}" when running this query:
+
+\`\`\`sql
+${originalQuery}
+\`\`\`
+
+Please help me fix it.`;
+    
+    // Set the message in the input and send it
+    messageInput.value = fixMessage;
+    sendMessage();
+    
+    // Focus on the input for continued conversation
+    setTimeout(() => {
+      messageInput.focus();
+    }, 100);
+  }
+
   // Add message to chat
   function addMessage(text, sender) {
     const messageElement = document.createElement('div');
@@ -1141,7 +1367,7 @@
     if (sender === 'bot') {
       messageElement.innerHTML = parseMarkdown(text);
       
-      // Add event listeners for copy buttons after adding the message
+      // Add event listeners for copy and run buttons after adding the message
       setTimeout(() => {
         const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
         copyButtons.forEach(button => {
@@ -1150,6 +1376,17 @@
             const codeId = button.getAttribute('data-code-id');
             if (codeId) {
               copyCodeToClipboard(codeId, button);
+            }
+          });
+        });
+        
+        const runButtons = messageElement.querySelectorAll('.chatbot-code-run');
+        runButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const codeId = button.getAttribute('data-code-id');
+            if (codeId) {
+              executeSQLQuery(codeId, button);
             }
           });
         });
@@ -1382,7 +1619,7 @@
         if (msg.sender === 'bot') {
           messageElement.innerHTML = parseMarkdown(msg.text);
           
-          // Add event listeners for copy buttons
+          // Add event listeners for copy and run buttons
           setTimeout(() => {
             const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
             copyButtons.forEach(button => {
@@ -1391,6 +1628,17 @@
                 const codeId = button.getAttribute('data-code-id');
                 if (codeId) {
                   copyCodeToClipboard(codeId, button);
+                }
+              });
+            });
+            
+            const runButtons = messageElement.querySelectorAll('.chatbot-code-run');
+            runButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  executeSQLQuery(codeId, button);
                 }
               });
             });
