@@ -470,9 +470,7 @@
         background: #1e293b;
         color: #e2e8f0;
         padding: 12px;
-        border-radius: 6px;
         overflow-x: auto;
-        margin: 8px 0;
         font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
         font-size: 0.85em;
         line-height: 1.4;
@@ -945,7 +943,8 @@
       // Use marked library if available
       if (window.marked && typeof window.marked.parse === 'function') {
         const html = window.marked.parse(text);
-        return sanitizeHtml(html);
+        const sanitizedHtml = sanitizeHtml(html);
+        return enhanceCodeBlocks(sanitizedHtml);
       }
     } catch (error) {
       console.warn('Error using marked library, falling back to simple parser:', error);
@@ -953,6 +952,53 @@
     
     // Fallback to simple markdown parsing
     return parseMarkdownSimple(text);
+  }
+
+  // Enhance code blocks with copy functionality
+  function enhanceCodeBlocks(html) {
+    // Create a temporary div to parse HTML
+    const temp = document.createElement('div');
+    temp.innerHTML = html;
+    
+    // Find all pre elements (code blocks)
+    const preElements = temp.querySelectorAll('pre');
+    
+    preElements.forEach((pre, index) => {
+      const code = pre.querySelector('code');
+      if (!code) return;
+      
+      // Extract language from class attribute (e.g., language-javascript)
+      let language = 'text';
+      const codeClasses = code.className || '';
+      const languageMatch = codeClasses.match(/language-(\w+)/);
+      if (languageMatch) {
+        language = languageMatch[1];
+      }
+      
+      // Get the code content
+      const codeContent = code.textContent || code.innerText || '';
+      
+      // Create enhanced code block structure
+      const codeBlockId = `chatbot-code-${Date.now()}-${index}`;
+      const enhancedCodeBlock = document.createElement('div');
+      enhancedCodeBlock.className = 'chatbot-code-block';
+      enhancedCodeBlock.innerHTML = `
+        <div class="chatbot-code-header">
+          <span class="chatbot-code-language">${language}</span>
+          <button class="chatbot-code-copy" data-code-id="${codeBlockId}" title="Copy code">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+          </button>
+        </div>
+        <pre class="chatbot-code-content" id="${codeBlockId}"><code>${codeContent}</code></pre>
+      `;
+      
+      // Replace the original pre element
+      pre.parentNode.replaceChild(enhancedCodeBlock, pre);
+    });
+    
+    return temp.innerHTML;
   }
 
   // Simple fallback markdown parser
@@ -973,8 +1019,22 @@
     text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
     text = text.replace(/\b_([^\s_]+)_\b/g, '<em>$1</em>');
 
-    // Code blocks ```code```
-    text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    // Code blocks with language detection ```language\ncode```
+    text = text.replace(/```(\w+)?\n?([\s\S]*?)```/g, (match, lang, code) => {
+      const language = lang || 'text';
+      const codeBlockId = `chatbot-code-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      return `<div class="chatbot-code-block">
+        <div class="chatbot-code-header">
+          <span class="chatbot-code-language">${language}</span>
+          <button class="chatbot-code-copy" data-code-id="${codeBlockId}" title="Copy code">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+            </svg>
+          </button>
+        </div>
+        <pre class="chatbot-code-content" id="${codeBlockId}"><code>${code.trim()}</code></pre>
+      </div>`;
+    });
     
     // Inline code `code`
     text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -1008,6 +1068,70 @@
     return text;
   }
 
+  // Copy code to clipboard
+  async function copyCodeToClipboard(codeId, button) {
+    try {
+      const codeElement = document.getElementById(codeId);
+      if (!codeElement) {
+        console.error('Code element not found:', codeId);
+        return;
+      }
+      
+      const codeContent = codeElement.querySelector('code');
+      const textToCopy = codeContent ? codeContent.textContent : codeElement.textContent;
+      
+      // Use modern clipboard API if available
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = textToCopy;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      
+      // Show visual feedback
+      const originalContent = button.innerHTML;
+      button.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      `;
+      button.style.color = '#10b981';
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.style.color = '';
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Failed to copy code:', error);
+      
+      // Show error feedback
+      const originalContent = button.innerHTML;
+      button.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      `;
+      button.style.color = '#ef4444';
+      
+      // Reset button after 2 seconds
+      setTimeout(() => {
+        button.innerHTML = originalContent;
+        button.style.color = '';
+      }, 2000);
+    }
+  }
+
   // Add message to chat
   function addMessage(text, sender) {
     const messageElement = document.createElement('div');
@@ -1016,6 +1140,20 @@
     // Parse markdown for bot messages, keep plain text for user messages
     if (sender === 'bot') {
       messageElement.innerHTML = parseMarkdown(text);
+      
+      // Add event listeners for copy buttons after adding the message
+      setTimeout(() => {
+        const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
+        copyButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const codeId = button.getAttribute('data-code-id');
+            if (codeId) {
+              copyCodeToClipboard(codeId, button);
+            }
+          });
+        });
+      }, 0);
     } else {
       messageElement.textContent = text;
     }
@@ -1243,6 +1381,20 @@
         // Parse markdown for bot messages, keep plain text for user messages
         if (msg.sender === 'bot') {
           messageElement.innerHTML = parseMarkdown(msg.text);
+          
+          // Add event listeners for copy buttons
+          setTimeout(() => {
+            const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
+            copyButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  copyCodeToClipboard(codeId, button);
+                }
+              });
+            });
+          }, 0);
         } else {
           messageElement.textContent = msg.text;
         }
@@ -1281,6 +1433,20 @@
       // Parse markdown for bot messages, keep plain text for user messages
       if (msg.sender === 'bot') {
         messageElement.innerHTML = parseMarkdown(msg.text);
+        
+        // Add event listeners for copy buttons
+        setTimeout(() => {
+          const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
+          copyButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+              e.preventDefault();
+              const codeId = button.getAttribute('data-code-id');
+              if (codeId) {
+                copyCodeToClipboard(codeId, button);
+              }
+            });
+          });
+        }, 0);
       } else {
         messageElement.textContent = msg.text;
       }
