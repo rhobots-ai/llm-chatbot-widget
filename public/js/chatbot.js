@@ -18,7 +18,12 @@
     maxHeight: '500px',
     width: '500px',
     zIndex: 10000,
-    view: 'bubble' // 'bubble' or 'sidesheet'
+    view: 'bubble', // 'bubble' or 'sidesheet'
+    // CSP Configuration
+    nonce: null, // CSP nonce for scripts and styles (e.g., 'abc123')
+    disableExternalCSS: false, // Force inline styles for strict CSP
+    disableExternalScripts: false, // Force fallback parsing for strict CSP
+    cssUrl: null // Custom CSS URL (auto-detected if not provided)
   };
 
   // Merge user config with defaults
@@ -1258,9 +1263,9 @@
           <span>Query executed successfully</span>
           <span class="chatbot-sql-meta">${rowCount} rows in ${executionTime}ms</span>
         </div>
-        <button class="chatbot-sql-toggle" onclick="this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display = this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display === 'none' ? 'block' : 'none'; this.textContent = this.textContent === '▼' ? '▲' : '▼';">▼</button>
+        <button class="chatbot-sql-toggle" data-toggle-target="${codeId}-results-content">▼</button>
       </div>
-      <div class="chatbot-sql-results-content">
+      <div class="chatbot-sql-results-content" id="${codeId}-results-content">
     `;
     
     if (data && data.length > 0) {
@@ -1309,9 +1314,9 @@
           <span class="chatbot-sql-error-icon">✗</span>
           <span>Query failed</span>
         </div>
-        <button class="chatbot-sql-toggle" onclick="this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display = this.parentElement.parentElement.querySelector('.chatbot-sql-results-content').style.display === 'none' ? 'block' : 'none'; this.textContent = this.textContent === '▼' ? '▲' : '▼';">▼</button>
+        <button class="chatbot-sql-toggle" data-toggle-target="${codeId}-results-content">▼</button>
       </div>
-      <div class="chatbot-sql-results-content">
+      <div class="chatbot-sql-results-content" id="${codeId}-results-content">
         <div class="chatbot-sql-error-message">${errorMessage}</div>
         <div class="chatbot-sql-error-actions">
           <button class="chatbot-sql-fix-btn" data-error="${encodeURIComponent(errorMessage)}" data-query="${encodeURIComponent(originalQuery)}">
@@ -1327,15 +1332,37 @@
     resultsContainer.innerHTML = resultsHTML;
     resultsContainer.style.display = 'block';
     
-    // Add event listener for fix button
-    const fixButton = resultsContainer.querySelector('.chatbot-sql-fix-btn');
-    if (fixButton) {
-      fixButton.addEventListener('click', () => {
+    // Add event listener for fix button using event delegation
+    setupSQLResultsEventListeners(resultsContainer);
+  }
+
+  // Setup event listeners for SQL results using event delegation
+  function setupSQLResultsEventListeners(container) {
+    // Use event delegation to handle clicks on dynamically created elements
+    container.addEventListener('click', (e) => {
+      // Handle SQL toggle buttons
+      if (e.target.matches('.chatbot-sql-toggle')) {
+        e.preventDefault();
+        const toggleButton = e.target;
+        const targetId = toggleButton.getAttribute('data-toggle-target');
+        const targetElement = document.getElementById(targetId);
+        
+        if (targetElement) {
+          const isVisible = targetElement.style.display !== 'none';
+          targetElement.style.display = isVisible ? 'none' : 'block';
+          toggleButton.textContent = isVisible ? '▼' : '▲';
+        }
+      }
+      
+      // Handle SQL fix buttons
+      if (e.target.matches('.chatbot-sql-fix-btn') || e.target.closest('.chatbot-sql-fix-btn')) {
+        e.preventDefault();
+        const fixButton = e.target.matches('.chatbot-sql-fix-btn') ? e.target : e.target.closest('.chatbot-sql-fix-btn');
         const error = decodeURIComponent(fixButton.getAttribute('data-error'));
         const query = decodeURIComponent(fixButton.getAttribute('data-query'));
         handleFixError(error, query);
-      });
-    }
+      }
+    });
   }
 
   // Handle fix error - send error context to chat
