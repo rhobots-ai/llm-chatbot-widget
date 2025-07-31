@@ -38,13 +38,9 @@ class MetabaseClient {
       // Prepare request headers
       const headers = {
         'Content-Type': 'application/json',
-        'User-Agent': 'ChatbotWidget/1.0'
+        'User-Agent': 'ChatbotWidget/1.0',
+        'x-api-key': this.apiKey
       };
-
-      // Add API key if available
-      if (this.apiKey) {
-        headers['X-Metabase-Session'] = this.apiKey;
-      }
 
       // Make API request
       const url = `${this.baseUrl}/api/card/${id}`;
