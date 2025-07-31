@@ -951,10 +951,11 @@
 
 /* Metabase integration styles */
 .chatbot-metabase-checkbox {
-  padding: 12px 20px;
+  padding: 8px 20px 12px 20px;
   border-top: 1px solid #e2e8f0;
   background: #f8fafc;
   font-size: 13px;
+  flex-shrink: 0;
 }
 
 .chatbot-metabase-label {
@@ -970,11 +971,13 @@
   height: 16px;
   cursor: pointer;
   accent-color: var(--chatbot-primary-color, #4F46E5);
+  flex-shrink: 0;
 }
 
 .chatbot-metabase-text {
   font-weight: 500;
   color: #374151;
+  flex-shrink: 0;
 }
 
 .chatbot-metabase-info {
@@ -985,10 +988,38 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 1;
 }
 
 .chatbot-metabase-label:hover .chatbot-metabase-text {
   color: var(--chatbot-primary-color, #4F46E5);
+}
+
+/* Ensure input container maintains proper sizing */
+.chatbot-widget-input-container {
+  padding: 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-shrink: 0;
+  min-height: 80px; /* Ensure minimum height */
+}
+
+/* Ensure input maintains proper size */
+.chatbot-widget-input {
+  flex: 1;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 12px 16px;
+  font-size: 14px;
+  outline: none;
+  resize: none;
+  max-height: 100px;
+  min-height: 44px; /* Ensure minimum height for input */
+  font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
 }
 
 /* Mobile responsiveness */
@@ -1058,5 +1089,19 @@
   
   .chatbot-numbered-list .chatbot-list-item:before {
     width: 14px;
+  }
+  
+  /* Mobile adjustments for Metabase checkbox */
+  .chatbot-metabase-checkbox {
+    padding: 6px 15px 10px 15px;
+  }
+  
+  .chatbot-metabase-info {
+    max-width: 120px;
+    font-size: 11px;
+  }
+  
+  .chatbot-metabase-text {
+    font-size: 12px;
   }
 }
