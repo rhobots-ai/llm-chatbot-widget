@@ -14,6 +14,9 @@ const { validateChatRequest, createErrorResponse } = require('./utils/validation
 const postgresManager = require('./utils/postgres');
 const sqlApiRoutes = require('./routes/sql-api');
 
+// Import Metabase API components
+const metabaseApiRoutes = require('./routes/metabase-api');
+
 // Create Express app
 const app = express();
 
@@ -93,6 +96,9 @@ app.use((req, res, next) => {
 
 // Mount SQL API routes
 app.use('/api/sql', sqlApiRoutes);
+
+// Mount Metabase API routes
+app.use('/api/metabase', metabaseApiRoutes);
 
 // Health check endpoint
 app.get('/health', async (req, res) => {
@@ -481,6 +487,9 @@ app.listen(PORT, async () => {
   console.log('   - POST /api/sql/execute (SQL Query Execution)');
   console.log('   - GET  /api/sql/test (Database Connection Test)');
   console.log('   - GET  /api/sql/docs (SQL API Documentation)');
+  console.log('   - GET  /api/metabase/question/:id (Metabase Question API)');
+  console.log('   - GET  /api/metabase/test (Metabase Connection Test)');
+  console.log('   - GET  /api/metabase/docs (Metabase API Documentation)');
 });
 
 // Graceful shutdown

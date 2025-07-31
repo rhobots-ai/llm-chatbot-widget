@@ -39,6 +39,12 @@
   let isTyping = false;
   let showingHistory = false;
 
+  // Metabase integration state
+  let metabaseQuestionId = null;
+  let metabaseQuestionData = null;
+  let isMetabasePage = false;
+  let includeMetabaseQuery = false;
+
   // DOM elements
   let chatBubble, chatWindow, messagesContainer, messageInput, sendButton;
 
@@ -685,6 +691,48 @@
         padding: 40px 20px;
       }
 
+      /* Metabase integration styles */
+      .chatbot-metabase-checkbox {
+        padding: 12px 20px;
+        border-top: 1px solid #e2e8f0;
+        background: #f8fafc;
+        font-size: 13px;
+      }
+
+      .chatbot-metabase-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .chatbot-metabase-input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--chatbot-primary-color, ${config.primaryColor});
+      }
+
+      .chatbot-metabase-text {
+        font-weight: 500;
+        color: #374151;
+      }
+
+      .chatbot-metabase-info {
+        color: #6b7280;
+        font-size: 12px;
+        margin-left: auto;
+        max-width: 200px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .chatbot-metabase-label:hover .chatbot-metabase-text {
+        color: var(--chatbot-primary-color, ${config.primaryColor});
+      }
+
       /* Mobile responsiveness */
       @media (max-width: 480px) {
         .chatbot-widget-window.view-bubble {
@@ -703,6 +751,10 @@
         .chatbot-widget-bubble.view-sidesheet {
           right: 20px !important;
           left: auto !important;
+        }
+
+        .chatbot-metabase-info {
+          max-width: 120px;
         }
       }
     `;
@@ -826,6 +878,8 @@
     }
     
     if (isOpen) {
+      // Create Metabase checkbox if on Metabase page
+      createMetabaseCheckbox();
       messageInput.focus();
       scrollToBottom();
     }
@@ -850,7 +904,10 @@
     const message = messageInput.value.trim();
     if (!message || isTyping) return;
 
-    // Add user message
+    // Enhance message with Metabase query if needed
+    const enhancedMessage = enhanceMessageWithMetabase(message);
+
+    // Add user message (display original message to user)
     addMessage(message, 'user');
     messageInput.value = '';
     autoResize();
@@ -859,9 +916,9 @@
     showTyping();
 
     try {
-      // Prepare request body
+      // Prepare request body (send enhanced message to API)
       const requestBody = {
-        message: message,
+        message: enhancedMessage,
         history: messageHistory
       };
 
@@ -1782,6 +1839,121 @@ Please help me fix it.`;
     }
   }
 
+  // Metabase integration functions
+  
+  // Detect if current page is a Metabase question page
+  function detectMetabasePage() {
+    const currentUrl = window.location.href;
+    const metabasePattern = /\/question\/(\d+)(?:-|$)/;
+    const match = currentUrl.match(metabasePattern);
+    
+    if (match) {
+      metabaseQuestionId = match[1];
+      isMetabasePage = true;
+      console.log(`🔍 Detected Metabase question page: ${metabaseQuestionId}`);
+      return true;
+    }
+    
+    isMetabasePage = false;
+    metabaseQuestionId = null;
+    return false;
+  }
+
+  // Fetch Metabase question data
+  async function fetchMetabaseQuestion(questionId) {
+    try {
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/metabase/question/${questionId}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch question: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      if (data.success && data.question) {
+        metabaseQuestionData = data.question;
+        console.log(`✅ Fetched Metabase question: "${data.question.name}"`);
+        return data.question;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error) {
+      console.error('❌ Error fetching Metabase question:', error);
+      return null;
+    }
+  }
+
+  // Create Metabase checkbox UI
+  function createMetabaseCheckbox() {
+    if (!isMetabasePage || !metabaseQuestionData) return;
+    
+    // Check if checkbox already exists
+    if (chatWindow.querySelector('.chatbot-metabase-checkbox')) return;
+    
+    const inputContainer = chatWindow.querySelector('.chatbot-widget-input-container');
+    if (!inputContainer) return;
+    
+    const checkboxContainer = document.createElement('div');
+    checkboxContainer.className = 'chatbot-metabase-checkbox';
+    checkboxContainer.innerHTML = `
+      <label class="chatbot-metabase-label">
+        <input type="checkbox" class="chatbot-metabase-input" ${includeMetabaseQuery ? 'checked' : ''}>
+        <span class="chatbot-metabase-text">Include question query</span>
+        <span class="chatbot-metabase-info" title="${metabaseQuestionData.name || 'Metabase Question'}">
+          📊 ${metabaseQuestionData.name ? metabaseQuestionData.name.substring(0, 30) + '...' : 'Question ' + metabaseQuestionId}
+        </span>
+      </label>
+    `;
+    
+    // Insert before input container
+    inputContainer.parentNode.insertBefore(checkboxContainer, inputContainer);
+    
+    // Add event listener
+    const checkbox = checkboxContainer.querySelector('.chatbot-metabase-input');
+    checkbox.addEventListener('change', (e) => {
+      includeMetabaseQuery = e.target.checked;
+      console.log(`📋 Metabase query inclusion: ${includeMetabaseQuery ? 'enabled' : 'disabled'}`);
+    });
+  }
+
+  // Remove Metabase checkbox
+  function removeMetabaseCheckbox() {
+    const checkbox = chatWindow?.querySelector('.chatbot-metabase-checkbox');
+    if (checkbox) {
+      checkbox.remove();
+    }
+  }
+
+  // Enhance message with Metabase query if needed
+  function enhanceMessageWithMetabase(message) {
+    if (!includeMetabaseQuery || !metabaseQuestionData || !metabaseQuestionData.query) {
+      return message;
+    }
+    
+    const enhancedMessage = `${message}
+
+[Metabase Question: ${metabaseQuestionData.name || 'Question ' + metabaseQuestionId}]
+\`\`\`sql
+${metabaseQuestionData.query}
+\`\`\``;
+    
+    console.log('📊 Enhanced message with Metabase query');
+    return enhancedMessage;
+  }
+
+  // Initialize Metabase integration
+  async function initializeMetabaseIntegration() {
+    if (detectMetabasePage()) {
+      try {
+        await fetchMetabaseQuestion(metabaseQuestionId);
+        // Checkbox will be created when chat window is opened
+      } catch (error) {
+        console.error('Failed to initialize Metabase integration:', error);
+      }
+    }
+  }
+
   // Initialize widget
   async function init() {
     // Wait for DOM to be ready
@@ -1800,6 +1972,10 @@ Please help me fix it.`;
       
       createChatBubble();
       createChatWindow();
+      
+      // Initialize Metabase integration
+      await initializeMetabaseIntegration();
+      
     } catch (error) {
       console.error('Failed to initialize chatbot widget:', error);
       // Still try to create the widget with fallback
