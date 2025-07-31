@@ -25,7 +25,7 @@ router.use(sqlRateLimit);
  */
 router.post('/execute', 
   validateSQLRequest,
-  validateSQLSecurity,
+  // validateSQLSecurity,
   logSQLRequest,
   async (req, res) => {
     try {
