@@ -47,7 +47,7 @@
       }
 
       const script = document.createElement('script');
-      script.src = './marked.umd.js';
+      script.src = './js/marked.umd.js';
       script.onload = () => {
         // Configure marked for security
         if (window.marked && window.marked.setOptions) {
