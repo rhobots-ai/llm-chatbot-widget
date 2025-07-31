@@ -884,7 +884,8 @@
     
     // Italic text *text* or _text_
     text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
-    text = text.replace(/_(.*?)_/g, '<em>$1</em>');
+    // More restrictive underscore italic pattern to avoid matching SQL columns and identifiers
+    text = text.replace(/\b_([^\s_]+)_\b/g, '<em>$1</em>');
 
     // Code blocks ```code```
     text = text.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
