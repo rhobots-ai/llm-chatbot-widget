@@ -2078,7 +2078,7 @@
     const isAvailable = isCodeMirrorAvailable();
     
     pasteButtons.forEach(button => {
-      button.style.display = isAvailable ? 'flex' : 'flex';
+      button.style.display = isAvailable ? 'flex' : 'none';
     });
   }
 
