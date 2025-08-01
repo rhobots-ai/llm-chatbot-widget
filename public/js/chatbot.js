@@ -633,7 +633,8 @@
       }
 
       .chatbot-code-copy,
-      .chatbot-code-run {
+      .chatbot-code-run,
+      .chatbot-code-paste {
         background: none;
         border: none;
         color: #64748b;
@@ -647,7 +648,8 @@
       }
 
       .chatbot-code-copy:hover,
-      .chatbot-code-run:hover {
+      .chatbot-code-run:hover,
+      .chatbot-code-paste:hover {
         background: #cbd5e1;
         color: #334155;
       }
@@ -662,6 +664,20 @@
       }
 
       .chatbot-code-run:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .chatbot-code-paste {
+        color: #7c3aed;
+      }
+
+      .chatbot-code-paste:hover {
+        background: #e9d5ff;
+        color: #6b21a8;
+      }
+
+      .chatbot-code-paste:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
@@ -1399,6 +1415,12 @@
     if (isOpen) {
       // Create Metabase checkbox if on Metabase page
       createMetabaseCheckbox();
+      
+      // Update paste button visibility when chat opens
+      setTimeout(() => {
+        updatePasteButtonVisibility();
+      }, 100);
+      
       messageInput.focus();
       scrollToBottom();
     }
@@ -1576,12 +1598,17 @@
         </button>
       `;
       
-      // Add run button for SQL blocks
+      // Add run button and paste to editor button for SQL blocks
       if (isSQLBlock) {
         headerButtons = `
           <button class="chatbot-code-run" data-code-id="${codeBlockId}" title="Run SQL query">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8 5v14l11-7z"/>
+            </svg>
+          </button>
+          <button class="chatbot-code-paste" data-code-id="${codeBlockId}" title="Paste to CodeMirror editor" style="display: none;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 2h-4.18C14.4.84 13.3 0 12 0c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm7 18H5V4h2v3h10V4h2v16z"/>
             </svg>
           </button>
         ` + headerButtons;
@@ -1941,6 +1968,120 @@
     });
   }
 
+  // Paste SQL code to CodeMirror editor
+  async function pasteToCodeMirror(codeId, button) {
+    try {
+      const codeElement = document.getElementById(codeId);
+      if (!codeElement) {
+        console.error('Code element not found:', codeId);
+        return;
+      }
+      
+      const codeContent = codeElement.querySelector('code');
+      const sqlCode = codeContent ? codeContent.textContent.trim() : '';
+      
+      if (!sqlCode) {
+        console.error('No SQL code found');
+        return;
+      }
+      
+      // Check if CodeMirror is available
+      let codeMirrorEditor = null;
+      
+      // Try different ways to access CodeMirror editor
+      if (window.editor && typeof window.editor.setValue === 'function') {
+        codeMirrorEditor = window.editor;
+      } else if (window.demoHelpers && typeof window.demoHelpers.setEditorContent === 'function') {
+        // Use demo helpers if available
+        window.demoHelpers.setEditorContent(sqlCode);
+        window.demoHelpers.setLanguage('sql');
+        
+        // Show success feedback
+        showPasteSuccess(button);
+        return;
+      }
+      
+      if (!codeMirrorEditor) {
+        // Show error feedback
+        showPasteError(button, 'CodeMirror editor not found');
+        return;
+      }
+      
+      // Set SQL mode if available
+      if (typeof codeMirrorEditor.setOption === 'function') {
+        codeMirrorEditor.setOption('mode', 'sql');
+      }
+      
+      // Set the SQL code
+      codeMirrorEditor.setValue(sqlCode);
+      
+      // Focus the editor if possible
+      if (typeof codeMirrorEditor.focus === 'function') {
+        codeMirrorEditor.focus();
+      }
+      
+      // Show success feedback
+      showPasteSuccess(button);
+      
+    } catch (error) {
+      console.error('Failed to paste to CodeMirror:', error);
+      showPasteError(button, error.message);
+    }
+  }
+  
+  // Show paste success feedback
+  function showPasteSuccess(button) {
+    const originalContent = button.innerHTML;
+    button.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+      </svg>
+    `;
+    button.style.color = '#10b981';
+    
+    // Reset button after 2 seconds
+    setTimeout(() => {
+      button.innerHTML = originalContent;
+      button.style.color = '';
+    }, 2000);
+  }
+  
+  // Show paste error feedback
+  function showPasteError(button, errorMessage) {
+    const originalContent = button.innerHTML;
+    button.innerHTML = `
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+      </svg>
+    `;
+    button.style.color = '#ef4444';
+    button.title = `Error: ${errorMessage}`;
+    
+    // Reset button after 3 seconds
+    setTimeout(() => {
+      button.innerHTML = originalContent;
+      button.style.color = '';
+      button.title = 'Paste to CodeMirror editor';
+    }, 3000);
+  }
+  
+  // Check if CodeMirror is available on the page
+  function isCodeMirrorAvailable() {
+    return (window.editor && typeof window.editor.setValue === 'function') ||
+           (window.demoHelpers && typeof window.demoHelpers.setEditorContent === 'function') ||
+           (window.CodeMirror && typeof window.CodeMirror === 'function');
+  }
+  
+  // Show/hide paste buttons based on CodeMirror availability
+  function updatePasteButtonVisibility() {
+    const pasteButtons = document.querySelectorAll('.chatbot-code-paste');
+    const isAvailable = isCodeMirrorAvailable();
+    
+    pasteButtons.forEach(button => {
+      button.style.display = isAvailable ? 'flex' : 'flex';
+    });
+  }
+
   // Handle fix error - send error context to chat
   function handleFixError(errorMessage, originalQuery) {
     const fixMessage = `I got this SQL error: "${errorMessage}" when running this query:
@@ -1993,6 +2134,20 @@ Please help me fix it.`;
             }
           });
         });
+        
+        const pasteButtons = messageElement.querySelectorAll('.chatbot-code-paste');
+        pasteButtons.forEach(button => {
+          button.addEventListener('click', (e) => {
+            e.preventDefault();
+            const codeId = button.getAttribute('data-code-id');
+            if (codeId) {
+              pasteToCodeMirror(codeId, button);
+            }
+          });
+        });
+        
+        // Update paste button visibility
+        updatePasteButtonVisibility();
       }, 0);
     } else {
       messageElement.textContent = text;
@@ -2254,6 +2409,20 @@ Please help me fix it.`;
                 }
               });
             });
+            
+
+            const pasteButtons = messageElement.querySelectorAll('.chatbot-code-paste');
+            pasteButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  pasteToCodeMirror(codeId, button);
+                }
+              });
+            });
+
+            updatePasteButtonVisibility();
           }, 0);
         } else {
           messageElement.textContent = msg.text;

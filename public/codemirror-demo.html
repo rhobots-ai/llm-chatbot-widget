@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CodeMirror + Chatbot Demo</title>
+    
+    <!-- CodeMirror CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/monokai.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/material.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .demo-layout {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .editor-section {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .editor-toolbar {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .toolbar-group label {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .toolbar-select, .toolbar-button {
+            padding: 6px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            background: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .toolbar-select:focus, .toolbar-button:hover {
+            border-color: #4F46E5;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.1);
+        }
+        
+        .toolbar-button {
+            background: #4F46E5;
+            color: white;
+            border-color: #4F46E5;
+            font-weight: 500;
+        }
+        
+        .toolbar-button:hover {
+            background: #3730a3;
+            border-color: #3730a3;
+        }
+        
+        .toolbar-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .editor-container {
+            flex: 1;
+            position: relative;
+            min-height: 500px;
+        }
+        
+        .CodeMirror {
+            height: 100% !important;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .info-panel {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .info-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .info-section h3 {
+            margin-bottom: 10px;
+            color: #343a40;
+            font-size: 1.1rem;
+        }
+        
+        .info-section p, .info-section li {
+            color: #6c757d;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        
+        .info-section ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .info-section li {
+            margin: 5px 0;
+        }
+        
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .feature-list li:last-child {
+            border-bottom: none;
+        }
+        
+        .feature-icon {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .chatbot-info {
+            background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+            color: white;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .chatbot-info h3 {
+            color: white;
+            margin-bottom: 10px;
+        }
+        
+        .chatbot-info p {
+            color: rgba(255,255,255,0.9);
+        }
+        
+        .output-section {
+            margin-top: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            display: none;
+        }
+        
+        .output-section.show {
+            display: block;
+        }
+        
+        .output-section h4 {
+            margin-bottom: 10px;
+            color: #343a40;
+        }
+        
+        .output-content {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .sample-code {
+            margin-top: 15px;
+        }
+        
+        .sample-button {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            margin: 5px 5px 5px 0;
+            transition: all 0.2s;
+        }
+        
+        .sample-button:hover {
+            background: #138496;
+            transform: translateY(-1px);
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .demo-layout {
+                grid-template-columns: 1fr;
+                gap: 15px;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .toolbar-group {
+                flex-wrap: wrap;
+            }
+            
+            .container {
+                padding: 15px;
+            }
+        }
+        
+        /* Loading animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Success/Error states */
+        .success {
+            color: #28a745;
+        }
+        
+        .error {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 CodeMirror + AI Chatbot Demo</h1>
+            <p>Write code with syntax highlighting and get AI assistance in real-time</p>
+        </div>
+        
+        <div class="demo-layout">
+            <div class="editor-section">
+                <div class="editor-toolbar">
+                    <div class="toolbar-group">
+                        <label for="language-select">Language:</label>
+                        <select id="language-select" class="toolbar-select">
+                            <option value="javascript">JavaScript</option>
+                            <option value="python">Python</option>
+                            <option value="sql">SQL</option>
+                            <option value="html">HTML</option>
+                            <option value="css">CSS</option>
+                            <option value="json">JSON</option>
+                            <option value="markdown">Markdown</option>
+                            <option value="xml">XML</option>
+                        </select>
+                        
+                        <label for="theme-select">Theme:</label>
+                        <select id="theme-select" class="toolbar-select">
+                            <option value="default">Default</option>
+                            <option value="monokai">Monokai</option>
+                            <option value="material">Material</option>
+                            <option value="dracula">Dracula</option>
+                        </select>
+                    </div>
+                    
+                    <div class="toolbar-group">
+                        <button id="run-code" class="toolbar-button">
+                            <span id="run-text">Run Code</span>
+                            <span id="run-loading" class="loading" style="display: none;"></span>
+                        </button>
+                        <button id="ask-ai" class="toolbar-button">Ask AI About Code</button>
+                        <button id="clear-editor" class="toolbar-button">Clear</button>
+                    </div>
+                </div>
+                
+                <div class="editor-container">
+                    <textarea id="code-editor"></textarea>
+                </div>
+                
+                <div id="output-section" class="output-section">
+                    <h4>Output:</h4>
+                    <div id="output-content" class="output-content"></div>
+                </div>
+            </div>
+            
+            <div class="info-panel">
+                <div class="info-section">
+                    <h3>🎯 Features</h3>
+                    <ul class="feature-list">
+                        <li><span class="feature-icon">✓</span> Syntax highlighting for multiple languages</li>
+                        <li><span class="feature-icon">✓</span> Multiple color themes</li>
+                        <li><span class="feature-icon">✓</span> Code execution (JavaScript)</li>
+                        <li><span class="feature-icon">✓</span> AI code assistance</li>
+                        <li><span class="feature-icon">✓</span> Auto-completion</li>
+                        <li><span class="feature-icon">✓</span> Line numbers</li>
+                        <li><span class="feature-icon">✓</span> Code folding</li>
+                        <li><span class="feature-icon">✓</span> Search & replace</li>
+                    </ul>
+                </div>
+                
+                <div class="chatbot-info">
+                    <h3>🤖 AI Assistant</h3>
+                    <p>Click the chat bubble to get help with your code! The AI can:</p>
+                    <ul>
+                        <li>Explain code functionality</li>
+                        <li>Debug errors</li>
+                        <li>Suggest improvements</li>
+                        <li>Write new code</li>
+                        <li>Answer programming questions</li>
+                    </ul>
+                </div>
+                
+                <div class="info-section sample-code">
+                    <h3>📝 Sample Code</h3>
+                    <p>Try these examples:</p>
+                    <button class="sample-button" data-lang="javascript" data-code="// Hello World in JavaScript
+console.log('Hello, World!');
+
+// Function example
+function fibonacci(n) {
+    if (n <= 1) return n;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+console.log('Fibonacci sequence:');
+for (let i = 0; i < 10; i++) {
+    console.log(`F(${i}) = ${fibonacci(i)}`);
+}">JavaScript Example</button>
+                    
+                    <button class="sample-button" data-lang="python" data-code="# Hello World in Python
+print('Hello, World!')
+
+# Class example
+class Calculator:
+    def __init__(self):
+        self.result = 0
+    
+    def add(self, x, y):
+        self.result = x + y
+        return self.result
+    
+    def multiply(self, x, y):
+        self.result = x * y
+        return self.result
+
+# Usage
+calc = Calculator()
+print(f'Addition: {calc.add(5, 3)}')
+print(f'Multiplication: {calc.multiply(4, 7)}')">Python Example</button>
+                    
+                    <button class="sample-button" data-lang="sql" data-code="-- Sample SQL Query
+SELECT 
+    u.name,
+    u.email,
+    COUNT(o.id) as order_count,
+    SUM(o.total) as total_spent
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at >= '2024-01-01'
+GROUP BY u.id, u.name, u.email
+HAVING COUNT(o.id) > 0
+ORDER BY total_spent DESC
+LIMIT 10;">SQL Example</button>
+                    
+                    <button class="sample-button" data-lang="html" data-code="<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Sample Page</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .highlight { background: yellow; padding: 2px 4px; }
+    </style>
+</head>
+<body>
+    <div class='container'>
+        <h1>Welcome to My Page</h1>
+        <p>This is a <span class='highlight'>sample HTML</span> document.</p>
+        <button onclick='alert(\"Hello World!\")'>Click Me</button>
+    </div>
+</body>
+</html>">HTML Example</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CodeMirror JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/htmlmixed/htmlmixed.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/css/css.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/xml/xml.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/markdown/markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/javascript-hint.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/brace-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/comment-fold.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/search.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/search/searchcursor.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/dialog/dialog.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/fold/foldgutter.min.css">
+
+    <!-- Chatbot Widget Configuration -->
+    <script>
+        window.ChatbotWidgetConfig = {
+            apiUrl: 'http://localhost:3000/api/chat',
+            primaryColor: '#4F46E5',
+            position: 'bottom-right',
+            title: 'Code Assistant',
+            icon: 'https://rhobots.ai/images/icon.svg',
+            welcomeMessage: 'Hello! I\'m your AI coding assistant. I can help you with code review, debugging, explanations, and writing new code. Just ask me anything!',
+            placeholder: 'Ask about your code...',
+            width: '400px',
+            maxHeight: '600px',
+            view: 'bubble',
+            assistantType: 'default',
+            provider: 'openai'
+        };
+    </script>
+
+    <!-- Load the Chatbot Widget -->
+    <script src="./js/chatbot.js" async></script>
+
+    <!-- Demo Application Script -->
+    <script>
+        // Initialize CodeMirror
+        let editor;
+        let currentLanguage = 'javascript';
+        
+        // Language mode mapping
+        const languageModes = {
+            'javascript': 'javascript',
+            'python': 'python',
+            'sql': 'sql',
+            'html': 'htmlmixed',
+            'css': 'css',
+            'json': { name: 'javascript', json: true },
+            'markdown': 'markdown',
+            'xml': 'xml'
+        };
+        
+        // Initialize editor
+        function initializeEditor() {
+            editor = CodeMirror.fromTextArea(document.getElementById('code-editor'), {
+                lineNumbers: true,
+                mode: languageModes[currentLanguage],
+                theme: 'default',
+                indentUnit: 2,
+                tabSize: 2,
+                indentWithTabs: false,
+                lineWrapping: true,
+                foldGutter: true,
+                gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
+                extraKeys: {
+                    "Ctrl-Space": "autocomplete",
+                    "Ctrl-F": "findPersistent",
+                    "Ctrl-H": "replace"
+                },
+                hintOptions: {
+                    completeSingle: false
+                }
+            });
+            
+            // Set initial content
+            editor.setValue(`// Welcome to the CodeMirror + AI Chatbot Demo!
+// Try writing some code and ask the AI assistant for help.
+
+function greetUser(name) {
+    return \`Hello, \${name}! Welcome to our coding playground.\`;
+}
+
+console.log(greetUser('Developer'));
+
+// Click "Ask AI About Code" to get help with this code!`);
+        }
+        
+        // Change language
+        function changeLanguage(language) {
+            currentLanguage = language;
+            editor.setOption('mode', languageModes[language]);
+            
+//             // Update placeholder content based on language
+//             const placeholders = {
+//                 'javascript': `// JavaScript Example
+// function fibonacci(n) {
+//     if (n <= 1) return n;
+//     return fibonacci(n - 1) + fibonacci(n - 2);
+// }
+
+// console.log(fibonacci(10));`,
+//                 'python': `# Python Example
+// def fibonacci(n):
+//     if n <= 1:
+//         return n
+//     return fibonacci(n - 1) + fibonacci(n - 2)
+
+// print(fibonacci(10))`,
+//                 'sql': `-- SQL Example
+// SELECT name, email, created_at
+// FROM users
+// WHERE created_at >= '2024-01-01'
+// ORDER BY created_at DESC
+// LIMIT 10;`,
+//                 'html': `<!DOCTYPE html>
+// <html>
+// <head>
+//     <title>Sample Page</title>
+// </head>
+// <body>
+//     <h1>Hello World</h1>
+//     <p>This is a sample HTML page.</p>
+// </body>
+// </html>`,
+//                 'css': `/* CSS Example */
+// .container {
+//     max-width: 1200px;
+//     margin: 0 auto;
+//     padding: 20px;
+// }
+
+// .button {
+//     background: #4F46E5;
+//     color: white;
+//     padding: 10px 20px;
+//     border: none;
+//     border-radius: 6px;
+//     cursor: pointer;
+// }`,
+//                 'json': `{
+//   "name": "sample-project",
+//   "version": "1.0.0",
+//   "description": "A sample JSON configuration",
+//   "main": "index.js",
+//   "scripts": {
+//     "start": "node index.js",
+//     "test": "jest"
+//   },
+//   "dependencies": {
+//     "express": "^4.18.0"
+//   }
+// }`,
+//                 'markdown': `# Sample Markdown
+
+// This is a **sample** markdown document.
+
+// ## Features
+
+// - Easy to write
+// - *Great* formatting
+// - Code blocks supported
+
+// \`\`\`javascript
+// console.log('Hello from markdown!');
+// \`\`\`
+
+// [Learn more](https://www.markdownguide.org/)`,
+//                 'xml': `<?xml version="1.0" encoding="UTF-8"?>
+// <bookstore>
+//     <book id="1">
+//         <title>JavaScript: The Good Parts</title>
+//         <author>Douglas Crockford</author>
+//         <price>29.99</price>
+//     </book>
+//     <book id="2">
+//         <title>Python Crash Course</title>
+//         <author>Eric Matthes</author>
+//         <price>39.99</price>
+//     </book>
+// </bookstore>`
+//             };
+            
+//             if (editor.getValue().trim() === '' || confirm('Replace current code with example?')) {
+//                 editor.setValue(placeholders[language] || '// Start coding here...');
+//             }
+        }
+        
+        // Change theme
+        function changeTheme(theme) {
+            editor.setOption('theme', theme);
+        }
+        
+        // Run code (JavaScript only for demo)
+        function runCode() {
+            const code = editor.getValue();
+            const outputSection = document.getElementById('output-section');
+            const outputContent = document.getElementById('output-content');
+            const runButton = document.getElementById('run-code');
+            const runText = document.getElementById('run-text');
+            const runLoading = document.getElementById('run-loading');
+            
+            if (currentLanguage !== 'javascript') {
+                outputContent.textContent = `Code execution is only supported for JavaScript in this demo.
+For other languages, use the AI assistant to get help!`;
+                outputSection.classList.add('show');
+                return;
+            }
+            
+            // Show loading state
+            runText.style.display = 'none';
+            runLoading.style.display = 'inline-block';
+            runButton.disabled = true;
+            
+            // Capture console output
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            let output = [];
+            
+            console.log = (...args) => {
+                output.push('LOG: ' + args.map(arg => 
+                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                ).join(' '));
+                originalLog.apply(console, args);
+            };
+            
+            console.error = (...args) => {
+                output.push('ERROR: ' + args.map(arg => String(arg)).join(' '));
+                originalError.apply(console, args);
+            };
+            
+            console.warn = (...args) => {
+                output.push('WARN: ' + args.map(arg => String(arg)).join(' '));
+                originalWarn.apply(console, args);
+            };
+            
+            try {
+                // Execute code in a timeout to prevent infinite loops
+                const timeoutId = setTimeout(() => {
+                    throw new Error('Code execution timeout (5 seconds)');
+                }, 5000);
+                
+                // Use Function constructor for safer evaluation
+                const func = new Function(code);
+                const result = func();
+                
+                clearTimeout(timeoutId);
+                
+                if (result !== undefined) {
+                    output.push('RETURN: ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
+                }
+                
+                if (output.length === 0) {
+                    output.push('Code executed successfully (no output)');
+                }
+                
+            } catch (error) {
+                output.push('ERROR: ' + error.message);
+            } finally {
+                // Restore console methods
+                console.log = originalLog;
+                console.error = originalError;
+                console.warn = originalWarn;
+                
+                // Show output
+                outputContent.textContent = output.join('\n');
+                outputSection.classList.add('show');
+                
+                // Reset button state
+                setTimeout(() => {
+                    runText.style.display = 'inline';
+                    runLoading.style.display = 'none';
+                    runButton.disabled = false;
+                }, 500);
+            }
+        }
+        
+        // Ask AI about code
+        function askAIAboutCode() {
+            const code = editor.getValue().trim();
+            
+            if (!code) {
+                alert('Please write some code first!');
+                return;
+            }
+            
+            // Check if chatbot is available
+            if (typeof window.ChatbotWidget === 'undefined') {
+                alert('Chatbot is not loaded yet. Please wait a moment and try again.');
+                return;
+            }
+            
+            // Prepare message for AI
+            const message = `I'm working with this ${currentLanguage.toUpperCase()} code. Can you help me understand it, find any issues, or suggest improvements?
+
+\`\`\`${currentLanguage}
+${code}
+\`\`\`
+
+Please provide:
+1. Code explanation
+2. Any potential issues or bugs
+3. Suggestions for improvement
+4. Best practices recommendations`;
+            
+            // Open chatbot and send message
+            window.ChatbotWidget.open();
+            
+            // Wait a bit for the chatbot to open, then send the message
+            setTimeout(() => {
+                window.ChatbotWidget.sendMessage(message);
+            }, 500);
+        }
+        
+        // Clear editor
+        function clearEditor() {
+            if (confirm('Are you sure you want to clear the editor?')) {
+                editor.setValue('');
+                document.getElementById('output-section').classList.remove('show');
+            }
+        }
+        
+        // Load sample code
+        function loadSampleCode(language, code) {
+            if (currentLanguage !== language) {
+                document.getElementById('language-select').value = language;
+                changeLanguage(language);
+            }
+            editor.setValue(code);
+        }
+        
+        // Initialize when DOM is loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeEditor();
+            
+            // Event listeners
+            document.getElementById('language-select').addEventListener('change', function() {
+                changeLanguage(this.value);
+            });
+            
+            document.getElementById('theme-select').addEventListener('change', function() {
+                changeTheme(this.value);
+            });
+            
+            document.getElementById('run-code').addEventListener('click', runCode);
+            document.getElementById('ask-ai').addEventListener('click', askAIAboutCode);
+            document.getElementById('clear-editor').addEventListener('click', clearEditor);
+            
+            // Sample code buttons
+            document.querySelectorAll('.sample-button').forEach(button => {
+                button.addEventListener('click', function() {
+                    const language = this.dataset.lang;
+                    const code = this.dataset.code;
+                    loadSampleCode(language, code);
+                });
+            });
+            
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.ctrlKey || e.metaKey) {
+                    switch(e.key) {
+                        case 'Enter':
+                            e.preventDefault();
+                            runCode();
+                            break;
+                        case 'k':
+                            e.preventDefault();
+                            clearEditor();
+                            break;
+                    }
+                }
+            });
+        });
+        
+        // Add some helpful global functions for the demo
+        window.demoHelpers = {
+            getEditorContent: () => editor.getValue(),
+            setEditorContent: (content) => editor.setValue(content),
+            getCurrentLanguage: () => currentLanguage,
+            setLanguage: (lang) => {
+                document.getElementById('language-select').value = lang;
+                changeLanguage(lang);
+            },
+            setTheme: (theme) => {
+                document.getElementById('theme-select').value = theme;
+                changeTheme(theme);
+            }
+        };
+    </script>
+</body>
+</html>

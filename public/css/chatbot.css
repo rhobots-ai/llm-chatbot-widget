@@ -462,7 +462,8 @@
 }
 
 .chatbot-code-copy,
-.chatbot-code-run {
+.chatbot-code-run,
+.chatbot-code-paste {
   background: none;
   border: none;
   color: #64748b;
@@ -476,7 +477,8 @@
 }
 
 .chatbot-code-copy:hover,
-.chatbot-code-run:hover {
+.chatbot-code-run:hover
+.chatbot-code-paste:hover {
   background: #cbd5e1;
   color: #334155;
 }
@@ -491,6 +493,20 @@
 }
 
 .chatbot-code-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chatbot-code-paste {
+  color: #7c3aed;
+}
+
+.chatbot-code-paste:hover {
+  background: #e9d5ff;
+  color: #6b21a8;
+}
+
+.chatbot-code-paste:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
