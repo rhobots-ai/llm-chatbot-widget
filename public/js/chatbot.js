@@ -19,6 +19,7 @@
     width: '500px',
     zIndex: 10000,
     view: 'bubble', // 'bubble' or 'sidesheet'
+    enableStreaming: true, // Enable/disable streaming responses
     // CSP Configuration
     nonce: null, // CSP nonce for scripts and styles (e.g., 'abc123')
     disableExternalCSS: false, // Force inline styles for strict CSP
@@ -276,7 +277,7 @@
       .chatbot-widget-window.view-sidesheet {
         top: 0;
         height: 100vh;
-        width: 400px;
+        width: 50%;
         border-radius: 0;
         animation: chatbot-widget-slideInSide 0.3s ease-out;
       }
@@ -1209,6 +1210,27 @@
         box-sizing: border-box;
       }
 
+      /* Streaming cursor animation */
+      .streaming-cursor {
+        color: var(--chatbot-primary-color, #4F46E5);
+        animation: chatbot-widget-blink 1s infinite;
+        font-weight: bold;
+        margin-left: 2px;
+      }
+
+      @keyframes chatbot-widget-blink {
+        0%, 50% {
+          opacity: 1;
+        }
+        51%, 100% {
+          opacity: 0;
+        }
+      }
+
+      .chatbot-widget-message.streaming {
+        position: relative;
+      }
+
       /* Mobile responsiveness */
       @media (max-width: 480px) {
         .chatbot-widget-window.view-bubble {
@@ -1453,11 +1475,209 @@
     messageInput.value = '';
     autoResize();
 
+    // Try streaming first, fallback to regular API if it fails
+    const streamingSupported = typeof ReadableStream !== 'undefined' && 
+                              typeof TextDecoder !== 'undefined' && 
+                              config.enableStreaming !== false; // Allow disabling streaming via config
+    
+    if (streamingSupported) {
+      try {
+        await sendMessageStreaming(enhancedMessage);
+        return;
+      } catch (error) {
+        console.warn('Streaming failed, falling back to regular API:', error);
+        // Continue to regular API below
+      }
+    }
+
+    // Fallback to regular API
+    await sendMessageRegular(enhancedMessage);
+  }
+
+  // Send message with streaming
+  async function sendMessageStreaming(enhancedMessage) {
+    return new Promise((resolve, reject) => {
+      // Show typing indicator
+      showTyping();
+
+      // Prepare request body
+      const requestBody = {
+        message: enhancedMessage,
+        history: messageHistory
+      };
+
+      // Include threadId if we have one
+      if (currentThreadId) {
+        requestBody.threadId = currentThreadId;
+      }
+
+      let streamingMessageElement = null;
+      let accumulatedContent = '';
+      let hasStarted = false;
+
+      // Use fetch with streaming response
+      fetch(config.apiUrl + '?stream=true', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        if (!response.body) {
+          throw new Error('ReadableStream not supported');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        function readStream() {
+          return reader.read().then(({ done, value }) => {
+            if (done) {
+              // Stream complete
+              if (hasStarted) {
+                resolve();
+              } else {
+                reject(new Error('Stream ended without data'));
+              }
+              return;
+            }
+
+            // Decode the chunk
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+
+            for (const line of lines) {
+              if (line.trim() === '') continue;
+              
+              // Parse Server-Sent Events format
+              if (line.startsWith('data: ')) {
+                try {
+                  const data = JSON.parse(line.slice(6));
+                  
+                  switch (data.type) {
+                    case 'connected':
+                      console.log('Streaming connected');
+                      break;
+                      
+                    case 'message_start':
+                      hideTyping();
+                      streamingMessageElement = createStreamingMessage();
+                      hasStarted = true;
+                      
+                      // Store thread ID from response
+                      if (data.threadId) {
+                        currentThreadId = data.threadId;
+                      }
+                      break;
+                      
+                    case 'progress':
+                      // Show progress indicator
+                      updateStreamingProgress(data);
+                      break;
+                      
+                    case 'message_delta':
+                      if (streamingMessageElement && data.content) {
+                        accumulatedContent = data.content;
+                        updateStreamingMessage(streamingMessageElement, accumulatedContent);
+                      }
+                      break;
+                      
+                    case 'message_complete':
+                      if (streamingMessageElement && data.content) {
+                        accumulatedContent = data.content;
+                        finalizeStreamingMessage(streamingMessageElement, accumulatedContent);
+                        
+                        // Add to message history
+                        messageHistory.push({ 
+                          text: accumulatedContent, 
+                          sender: 'bot', 
+                          timestamp: Date.now() 
+                        });
+                      }
+                      
+                      // Store thread ID from response
+                      if (data.threadId) {
+                        currentThreadId = data.threadId;
+                      }
+                      break;
+                      
+                    case 'done':
+                      // Store conversation and thread IDs
+                      if (data.conversationId) {
+                        currentConversationId = data.conversationId;
+                      }
+                      if (data.threadId) {
+                        currentThreadId = data.threadId;
+                      }
+                      
+                      resolve();
+                      return;
+                      
+                    case 'error':
+                      console.error('Streaming error:', data.error);
+                      hideTyping();
+                      
+                      if (!hasStarted) {
+                        // If streaming never started, reject to trigger fallback
+                        reject(new Error(data.error));
+                      } else {
+                        // If streaming was in progress, show error message
+                        addMessage('Sorry, there was an error processing your request.', 'bot');
+                        resolve();
+                      }
+                      return;
+                  }
+                } catch (parseError) {
+                  console.error('Error parsing streaming data:', parseError);
+                }
+              }
+            }
+
+            // Continue reading
+            return readStream();
+          });
+        }
+
+        return readStream();
+      })
+      .catch(error => {
+        console.error('Streaming request error:', error);
+        hideTyping();
+        
+        if (!hasStarted) {
+          reject(error);
+        } else {
+          addMessage('Connection lost. Please try again.', 'bot');
+          resolve();
+        }
+      });
+
+      // Cleanup on timeout
+      setTimeout(() => {
+        hideTyping();
+        
+        if (!hasStarted) {
+          reject(new Error('Streaming timeout'));
+        } else {
+          addMessage('Request timed out. Please try again.', 'bot');
+          resolve();
+        }
+      }, 120000); // 120 second timeout
+    });
+  }
+
+  // Send message with regular API (fallback)
+  async function sendMessageRegular(enhancedMessage) {
     // Show typing indicator
     showTyping();
 
     try {
-      // Prepare request body (send enhanced message to API)
+      // Prepare request body
       const requestBody = {
         message: enhancedMessage,
         history: messageHistory
@@ -1503,6 +1723,84 @@
       hideTyping();
       addMessage('Sorry, I\'m having trouble connecting right now. Please try again later.', 'bot');
     }
+  }
+
+  // Create streaming message element
+  function createStreamingMessage() {
+    const messageElement = document.createElement('div');
+    messageElement.className = 'chatbot-widget-message bot streaming';
+    messageElement.innerHTML = '<span class="streaming-cursor">▋</span>';
+    
+    messagesContainer.appendChild(messageElement);
+    scrollToBottom();
+    
+    return messageElement;
+  }
+
+  // Update streaming message content
+  function updateStreamingMessage(messageElement, content) {
+    if (!messageElement) return;
+    
+    // Parse markdown and add streaming cursor
+    const parsedContent = parseMarkdown(content);
+    messageElement.innerHTML = parsedContent + '<span class="streaming-cursor">▋</span>';
+    
+    scrollToBottom();
+  }
+
+  // Finalize streaming message
+  function finalizeStreamingMessage(messageElement, content) {
+    if (!messageElement) return;
+    
+    // Remove streaming class and cursor
+    messageElement.classList.remove('streaming');
+    messageElement.innerHTML = parseMarkdown(content);
+    
+    // Add event listeners for code blocks
+    setTimeout(() => {
+      const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
+      copyButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          const codeId = button.getAttribute('data-code-id');
+          if (codeId) {
+            copyCodeToClipboard(codeId, button);
+          }
+        });
+      });
+      
+      const runButtons = messageElement.querySelectorAll('.chatbot-code-run');
+      runButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          const codeId = button.getAttribute('data-code-id');
+          if (codeId) {
+            executeSQLQuery(codeId, button);
+          }
+        });
+      });
+      
+      const pasteButtons = messageElement.querySelectorAll('.chatbot-code-paste');
+      pasteButtons.forEach(button => {
+        button.addEventListener('click', (e) => {
+          e.preventDefault();
+          const codeId = button.getAttribute('data-code-id');
+          if (codeId) {
+            pasteToCodeMirror(codeId, button);
+          }
+        });
+      });
+      
+      updatePasteButtonVisibility();
+    }, 0);
+    
+    scrollToBottom();
+  }
+
+  // Update streaming progress (optional visual feedback)
+  function updateStreamingProgress(progressData) {
+    // Could add progress indicator here if desired
+    console.log('Streaming progress:', progressData);
   }
 
   // HTML sanitization function to prevent XSS

@@ -125,6 +125,13 @@ app.get('/health', async (req, res) => {
 // Main chat endpoint
 app.post('/api/chat', async (req, res) => {
   try {
+    // Check if streaming is requested
+    const isStreaming = req.query.stream === 'true' || req.body.stream === true;
+    
+    if (isStreaming) {
+      return handleStreamingChat(req, res);
+    }
+
     // Validate request
     const validation = validateChatRequest(req.body);
     if (!validation.isValid) {
@@ -259,6 +266,155 @@ app.post('/api/chat', async (req, res) => {
     ));
   }
 });
+
+// Streaming chat handler
+async function handleStreamingChat(req, res) {
+  try {
+    // Validate request
+    const validation = validateChatRequest(req.body);
+    if (!validation.isValid) {
+      return res.status(400).json(createErrorResponse(
+        'Invalid request',
+        validation.errors,
+        400
+      ));
+    }
+
+    const { message, history, provider, assistantId, assistantType, conversationId, threadId } = validation.data;
+
+    // Set up Server-Sent Events headers
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Cache-Control'
+    });
+
+    // Send initial connection event
+    res.write('data: ' + JSON.stringify({ type: 'connected' }) + '\n\n');
+
+    // Determine which assistant configuration to use
+    let assistantConfig;
+    if (assistantType && assistantsConfig[assistantType]) {
+      assistantConfig = assistantsConfig[assistantType];
+    } else {
+      assistantConfig = assistantsConfig.default;
+    }
+
+    // Override with request parameters if provided
+    const finalProvider = provider || assistantConfig.provider || 'openai';
+    const finalAssistantId = assistantId || assistantConfig.assistantId || config.openai.defaultAssistantId;
+
+    if (!finalAssistantId) {
+      res.write('data: ' + JSON.stringify({
+        type: 'error',
+        error: 'No assistant configured'
+      }) + '\n\n');
+      res.end();
+      return;
+    }
+
+    // Get or create conversation based on thread ID
+    let currentConversationId = conversationId;
+    let existingThreadId = threadId;
+
+    if (threadId) {
+      // Look up existing conversation by thread ID
+      const existingConversation = await conversationManager.getConversationByThreadId(threadId);
+      if (existingConversation) {
+        currentConversationId = existingConversation.id;
+      } else {
+        console.warn(`Thread ID ${threadId} provided but no conversation found`);
+      }
+    }
+
+    // Create new conversation if none exists
+    if (!currentConversationId) {
+      currentConversationId = await conversationManager.createConversation(req.ip, {
+        provider: finalProvider,
+        assistantId: finalAssistantId,
+        assistantType: assistantType || 'default'
+      });
+    }
+
+    // Add user message to conversation
+    await conversationManager.addMessage(currentConversationId, message, 'user');
+
+    // Get provider configuration
+    let providerConfig;
+    switch (finalProvider) {
+      case 'openai':
+        providerConfig = {
+          apiKey: config.openai.apiKey,
+          defaultAssistantId: finalAssistantId
+        };
+        break;
+      default:
+        res.write('data: ' + JSON.stringify({
+          type: 'error',
+          error: `Provider '${finalProvider}' is not supported`
+        }) + '\n\n');
+        res.end();
+        return;
+    }
+
+    // Create provider instance
+    const aiProvider = await providerFactory.createProvider(finalProvider, providerConfig);
+
+    // Handle client disconnect
+    req.on('close', () => {
+      console.log('Client disconnected from streaming chat');
+    });
+
+    // Send message to AI provider with streaming
+    const response = await aiProvider.sendMessageStream(message, history, {
+      assistantId: finalAssistantId,
+      threadId: existingThreadId
+    }, (event) => {
+      console.log(event)
+      // Send streaming events to client
+      if (!res.destroyed) {
+        res.write('data: ' + JSON.stringify(event) + '\n\n');
+      }
+    });
+
+    // Extract response message and thread ID
+    const responseMessage = typeof response === 'string' ? response : response.message;
+    const responseThreadId = typeof response === 'object' ? response.threadId : null;
+
+    // Map conversation to thread if we got a new thread ID
+    if (responseThreadId && !existingThreadId) {
+      await conversationManager.mapToThread(currentConversationId, responseThreadId);
+    }
+
+    // Add bot response to conversation
+    await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
+
+    // Send final completion event
+    if (!res.destroyed) {
+      res.write('data: ' + JSON.stringify({
+        type: 'done',
+        conversationId: currentConversationId,
+        threadId: responseThreadId || existingThreadId,
+        provider: finalProvider,
+        assistantId: finalAssistantId
+      }) + '\n\n');
+      res.end();
+    }
+
+  } catch (error) {
+    console.error('Streaming Chat API Error:', error);
+    
+    if (!res.destroyed) {
+      res.write('data: ' + JSON.stringify({
+        type: 'error',
+        error: error.message
+      }) + '\n\n');
+      res.end();
+    }
+  }
+}
 
 // Get available providers endpoint
 app.get('/api/providers', (req, res) => {

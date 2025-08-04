@@ -121,6 +121,164 @@ class OpenAIProvider extends BaseProvider {
     }
   }
 
+  async sendMessageStream(message, history = [], options = {}, onProgress) {
+    if (!this.client) {
+      throw new Error('OpenAI provider not initialized');
+    }
+
+    const assistantId = options.assistantId || this.defaultAssistantId;
+    if (!assistantId) {
+      throw new Error('No assistant ID provided');
+    }
+
+    try {
+      // Get or create thread
+      let threadId = options.threadId;
+      if (!threadId) {
+        threadId = await this.createThread();
+      }
+
+      // Add the user message to the thread
+      await this.client.beta.threads.messages.create(threadId, {
+        role: 'user',
+        content: message
+      });
+
+      // Emit start event
+      if (onProgress) {
+        onProgress({
+          type: 'message_start',
+          threadId: threadId
+        });
+      }
+
+      // Run the assistant
+      const run = await this.client.beta.threads.runs.create(threadId, {
+        assistant_id: assistantId
+      });
+
+      // Poll for completion with streaming updates
+      let runStatus = await this.client.beta.threads.runs.retrieve(threadId, run.id);
+      const maxAttempts = 30; // 30 seconds timeout
+      let attempts = 0;
+      let lastMessageContent = '';
+      
+      while (runStatus.status === 'in_progress' || runStatus.status === 'queued') {
+        if (attempts >= maxAttempts) {
+          throw new Error('Assistant response timeout');
+        }
+
+        // Emit progress event
+        if (onProgress) {
+          onProgress({
+            type: 'progress',
+            status: runStatus.status,
+            step: attempts + 1,
+            maxSteps: maxAttempts
+          });
+        }
+
+        // Check for partial messages during processing
+        if (runStatus.status === 'in_progress') {
+          try {
+            const messages = await this.client.beta.threads.messages.list(threadId, {
+              order: 'desc',
+              limit: 1
+            });
+
+            const latestMessage = messages.data[0];
+            if (latestMessage && latestMessage.role === 'assistant') {
+              const textContent = latestMessage.content.find(content => content.type === 'text');
+              if (textContent && textContent.text.value !== lastMessageContent) {
+                lastMessageContent = textContent.text.value;
+                
+                // Emit partial content
+                if (onProgress) {
+                  onProgress({
+                    type: 'message_delta',
+                    content: lastMessageContent,
+                    threadId: threadId
+                  });
+                }
+              }
+            }
+          } catch (partialError) {
+            // Ignore errors when checking for partial content
+            console.debug('Error checking partial content:', partialError.message);
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        runStatus = await this.client.beta.threads.runs.retrieve(threadId, run.id);
+        attempts++;
+      }
+
+      if (runStatus.status === 'failed') {
+        const errorMessage = runStatus.last_error && runStatus.last_error.message 
+          ? runStatus.last_error.message 
+          : 'Unknown error';
+        throw new Error(`Assistant run failed: ${errorMessage}`);
+      }
+
+      if (runStatus.status === 'requires_action') {
+        throw new Error('Assistant requires action (function calling not implemented)');
+      }
+
+      // Get the final assistant's response
+      const messages = await this.client.beta.threads.messages.list(threadId, {
+        order: 'desc',
+        limit: 1
+      });
+
+      const assistantMessage = messages.data[0];
+      if (!assistantMessage || assistantMessage.role !== 'assistant') {
+        throw new Error('No assistant response found');
+      }
+
+      // Extract text content
+      const textContent = assistantMessage.content.find(content => content.type === 'text');
+      if (!textContent) {
+        throw new Error('No text content in assistant response');
+      }
+
+      const finalMessage = textContent.text.value;
+
+      // Store thread ID for future use
+      this.threads.set(threadId, {
+        id: threadId,
+        created: Date.now(),
+        lastUsed: Date.now()
+      });
+
+      // Emit completion event
+      if (onProgress) {
+        onProgress({
+          type: 'message_complete',
+          content: finalMessage,
+          threadId: threadId
+        });
+      }
+
+      return {
+        message: finalMessage,
+        threadId: threadId
+      };
+
+    } catch (error) {
+      console.error('OpenAI Provider Stream Error:', error);
+      
+      // Emit error event
+      if (onProgress) {
+        onProgress({
+          type: 'error',
+          error: error.message
+        });
+      }
+      
+      throw new Error(`OpenAI API error: ${error.message}`);
+    }
+  }
+
   async createThread(options = {}) {
     if (!this.client) {
       throw new Error('OpenAI provider not initialized');
