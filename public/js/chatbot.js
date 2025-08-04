@@ -30,6 +30,15 @@
   // Merge user config with defaults
   const config = Object.assign({}, defaultConfig, window.ChatbotWidgetConfig || {});
 
+  // Extract base URL from config.apiUrl, fallback to window.location.origin
+  let baseUrl;
+  try {
+    baseUrl = new URL(config.apiUrl).origin;
+  } catch (error) {
+    console.warn('Invalid apiUrl in config, falling back to window.location.origin:', error);
+    baseUrl = window.location.origin;
+  }
+
   // Widget state
   let isOpen = false;
   let isMinimized = false;
@@ -3123,7 +3132,6 @@ ${metabaseQuestionData.query}
 
     try {
       // Generate share URL
-      const baseUrl = window.location.origin;
       const shareUrl = `${baseUrl}/chat/${currentConversationId}`;
       
       // Copy to clipboard
