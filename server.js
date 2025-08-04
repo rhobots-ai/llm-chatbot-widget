@@ -144,7 +144,7 @@ app.get('/chat/:conversationId', async (req, res) => {
           </div>
           
           <footer class="chat-footer">
-            <p>This is a shared conversation. <a href="/">Start your own chat</a></p>
+            <p>This is a shared conversation. <a href="/demo.html">Start your own chat</a></p>
           </footer>
         </div>
         
