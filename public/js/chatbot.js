@@ -1417,6 +1417,11 @@
               <path d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/>
             </svg>
           </button>
+          <button class="chatbot-widget-header-btn" id="chatbot-share-conversation" title="Share Conversation" style="display: none;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
+            </svg>
+          </button>
           <button class="chatbot-widget-header-btn" id="chatbot-toggle-view" title="Toggle View">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
@@ -1450,10 +1455,14 @@
     // Action button listeners
     chatWindow.querySelector('#chatbot-new-conversation').addEventListener('click', startNewConversation);
     chatWindow.querySelector('#chatbot-show-history').addEventListener('click', toggleHistoryView);
+    chatWindow.querySelector('#chatbot-share-conversation').addEventListener('click', shareConversation);
     chatWindow.querySelector('#chatbot-toggle-view').addEventListener('click', toggleView);
 
     // Initialize toggle button icon
     updateToggleButtonIcon();
+    
+    // Update share button visibility
+    updateShareButtonVisibility();
 
     document.body.appendChild(chatWindow);
   }
@@ -1653,6 +1662,9 @@
                         currentThreadId = data.threadId;
                       }
                       
+                      // Update share button visibility
+                      updateShareButtonVisibility();
+                      
                       resolve();
                       return;
                       
@@ -1830,6 +1842,9 @@
       });
       
       updatePasteButtonVisibility();
+
+      // Update share button visibility
+      updateShareButtonVisibility();
     }, 0);
     
     scrollToBottom();
@@ -2492,6 +2507,9 @@ Please help me fix it.`;
     messagesContainer.appendChild(messageElement);
     messageHistory.push({ text, sender, timestamp: Date.now() });
     
+    // Update share button visibility when messages are added
+    updateShareButtonVisibility();
+    
     scrollToBottom();
   }
 
@@ -2639,8 +2657,8 @@ Please help me fix it.`;
     
     try {
       // Get user ID (using IP as user identifier for now)
-      const userId = '::ffff:127.0.0.1';
-      // const userId = '::1';
+      // const userId = '::ffff:127.0.0.1';
+      const userId = '::1';
       
       // Fetch conversations from backend
       const apiBaseUrl = config.apiUrl.replace('/chat', '');
@@ -2782,6 +2800,9 @@ Please help me fix it.`;
             });
 
             updatePasteButtonVisibility();
+
+            // Update share button visibility
+            updateShareButtonVisibility();
           }, 0);
         } else {
           messageElement.textContent = msg.text;
@@ -2870,6 +2891,9 @@ Please help me fix it.`;
             });
 
             updatePasteButtonVisibility();
+
+            // Update share button visibility
+            updateShareButtonVisibility();
           }, 0);
         } else {
           messageElement.textContent = msg.text;
@@ -3087,6 +3111,92 @@ ${metabaseQuestionData.query}
     
     console.log('📊 Enhanced message with Metabase query');
     return enhancedMessage;
+  }
+
+  // Share conversation
+  async function shareConversation() {
+    if (!currentConversationId) {
+      // Show error message
+      addMessage('No conversation to share. Start a conversation first!', 'bot');
+      return;
+    }
+
+    try {
+      // Generate share URL
+      const baseUrl = window.location.origin;
+      const shareUrl = `${baseUrl}/chat/${currentConversationId}`;
+      
+      // Copy to clipboard
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(shareUrl);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = shareUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      
+      // Show success feedback
+      const shareButton = chatWindow.querySelector('#chatbot-share-conversation');
+      const originalContent = shareButton.innerHTML;
+      shareButton.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+        </svg>
+      `;
+      shareButton.style.color = '#10b981';
+      shareButton.title = 'Link copied to clipboard!';
+      
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        shareButton.innerHTML = originalContent;
+        shareButton.style.color = '';
+        shareButton.title = 'Share Conversation';
+      }, 3000);
+      
+      // Also show a temporary message
+      addMessage(`✅ Conversation link copied to clipboard!\n\nShare this link: ${shareUrl}`, 'bot');
+      
+    } catch (error) {
+      console.error('Failed to share conversation:', error);
+      
+      // Show error feedback
+      const shareButton = chatWindow.querySelector('#chatbot-share-conversation');
+      const originalContent = shareButton.innerHTML;
+      shareButton.innerHTML = `
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+        </svg>
+      `;
+      shareButton.style.color = '#ef4444';
+      shareButton.title = 'Failed to copy link';
+      
+      // Reset button after 3 seconds
+      setTimeout(() => {
+        shareButton.innerHTML = originalContent;
+        shareButton.style.color = '';
+        shareButton.title = 'Share Conversation';
+      }, 3000);
+      
+      addMessage('❌ Failed to copy share link. Please try again.', 'bot');
+    }
+  }
+
+  // Update share button visibility
+  function updateShareButtonVisibility() {
+    const shareButton = chatWindow.querySelector('#chatbot-share-conversation');
+    if (shareButton) {
+      // Show share button only if we have a conversation with messages
+      const hasConversation = currentConversationId && messageHistory.length > 1;
+      shareButton.style.display = hasConversation ? 'flex' : 'none';
+    }
   }
 
   // Initialize Metabase integration

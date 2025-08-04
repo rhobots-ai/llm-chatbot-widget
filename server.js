@@ -87,6 +87,138 @@ app.use(express.static('public', {
   }
 }));
 
+// Serve shared conversation page
+app.get('/chat/:conversationId', async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    
+    // Get conversation with messages
+    const conversation = await conversationManager.getConversationWithMessages(conversationId);
+    if (!conversation) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Conversation Not Found</title>
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                   text-align: center; padding: 2rem; background: #f8f9fa; }
+            .error { background: white; padding: 2rem; border-radius: 8px; max-width: 400px; 
+                     margin: 2rem auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+          </style>
+        </head>
+        <body>
+          <div class="error">
+            <h1>🔍 Conversation Not Found</h1>
+            <p>The conversation you're looking for doesn't exist or may have been deleted.</p>
+          </div>
+        </body>
+        </html>
+      `);
+    }
+
+    // Serve the shared conversation page
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${conversation.name || 'Shared Conversation'}</title>
+        <link rel="stylesheet" href="/css/shared-chat.css">
+      </head>
+      <body>
+        <div class="shared-chat-container">
+          <header class="chat-header">
+            <h1>${conversation.name || 'Shared Conversation'}</h1>
+            <div class="chat-meta">
+              <span class="date">${new Date(conversation.created_at).toLocaleDateString()}</span>
+              <span class="message-count">${conversation.message_count} messages</span>
+            </div>
+          </header>
+          
+          <div class="messages-container" id="messagesContainer">
+            <!-- Messages will be loaded here -->
+          </div>
+          
+          <footer class="chat-footer">
+            <p>This is a shared conversation. <a href="/">Start your own chat</a></p>
+          </footer>
+        </div>
+        
+        <script>
+          // Load conversation data
+          const conversationData = ${JSON.stringify({
+            id: conversation.id,
+            name: conversation.name,
+            created: conversation.created_at,
+            messageCount: conversation.message_count,
+            messages: conversation.messages
+          })};
+          
+          // Render messages
+          function renderMessages() {
+            const container = document.getElementById('messagesContainer');
+            
+            conversationData.messages.forEach(message => {
+              const messageEl = document.createElement('div');
+              messageEl.className = \`message \${message.sender}\`;
+              
+              const timestamp = new Date(message.timestamp).toLocaleTimeString();
+              
+              messageEl.innerHTML = \`
+                <div class="message-content">
+                  <div class="message-text">\${escapeHtml(message.text)}</div>
+                  <div class="message-time">\${timestamp}</div>
+                </div>
+              \`;
+              
+              container.appendChild(messageEl);
+            });
+          }
+          
+          function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+          }
+          
+          // Initialize
+          document.addEventListener('DOMContentLoaded', renderMessages);
+        </script>
+      </body>
+      </html>
+    `);
+    
+  } catch (error) {
+    console.error('Shared Chat Error:', error);
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Error</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+                 text-align: center; padding: 2rem; background: #f8f9fa; }
+          .error { background: white; padding: 2rem; border-radius: 8px; max-width: 400px; 
+                   margin: 2rem auto; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        </style>
+      </head>
+      <body>
+        <div class="error">
+          <h1>⚠️ Error</h1>
+          <p>Something went wrong while loading this conversation.</p>
+        </div>
+      </body>
+      </html>
+    `);
+  }
+});
+
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
