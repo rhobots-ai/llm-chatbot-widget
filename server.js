@@ -386,7 +386,6 @@ async function handleStreamingChat(req, res) {
       assistantId: finalAssistantId,
       threadId: existingThreadId
     }, (event) => {
-      console.log(event)
       // Send streaming events to client
       if (!res.destroyed) {
         res.write('data: ' + JSON.stringify(event) + '\n\n');
@@ -480,6 +479,7 @@ app.get('/api/conversations/:id', async (req, res) => {
 
     res.json({
       id: conversation.id,
+      name: conversation.name,
       userId: conversation.user_id,
       threadId: conversation.thread_id,
       provider: conversation.provider,
@@ -509,6 +509,7 @@ app.get('/api/users/:userId/conversations', async (req, res) => {
     res.json({
       conversations: conversations.map(conv => ({
         id: conv.id,
+        name: conv.name || 'Untitled Conversation',
         threadId: conv.thread_id,
         provider: conv.provider,
         assistantType: conv.assistant_type,
@@ -582,6 +583,7 @@ app.get('/api/threads/:threadId/conversation', async (req, res) => {
     
     res.json({
       id: fullConversation.id,
+      name: fullConversation.name,
       userId: fullConversation.user_id,
       threadId: fullConversation.thread_id,
       provider: fullConversation.provider,

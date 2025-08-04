@@ -23,13 +23,14 @@ class ConversationManager {
    * Create a new conversation
    * @param {string} userId - User identifier (optional)
    * @param {Object} metadata - Additional conversation metadata
+   * @param {string} name - Optional conversation name
    * @returns {string} - Conversation ID
    */
-  async createConversation(userId = null, metadata = {}) {
+  async createConversation(userId = null, metadata = {}, name = null) {
     await this.ensureInitialized();
     const conversationId = this.generateId();
     const metabaseQuestionUrl = metadata.metabaseQuestionUrl || null;
-    await database.createConversation(conversationId, userId, metadata, metabaseQuestionUrl);
+    await database.createConversation(conversationId, userId, metadata, metabaseQuestionUrl, name);
     return conversationId;
   }
 
@@ -60,6 +61,12 @@ class ConversationManager {
     }
 
     await database.addMessage(conversationId, message, sender, metadata);
+    
+    // Auto-generate conversation name from first user message if not already named
+    if (sender === 'user' && !conversation.name && conversation.message_count === 0) {
+      const generatedName = database.generateConversationName(message);
+      await database.updateConversationName(conversationId, generatedName);
+    }
   }
 
   /**
@@ -155,6 +162,26 @@ class ConversationManager {
   async updateConversationMetadata(conversationId, metadata) {
     await this.ensureInitialized();
     return await database.updateConversationMetadata(conversationId, metadata);
+  }
+
+  /**
+   * Update conversation name
+   * @param {string} conversationId - Conversation ID
+   * @param {string} name - New conversation name
+   * @returns {boolean} - Success status
+   */
+  async updateConversationName(conversationId, name) {
+    await this.ensureInitialized();
+    return await database.updateConversationName(conversationId, name);
+  }
+
+  /**
+   * Generate conversation name from message
+   * @param {string} message - Message to generate name from
+   * @returns {string} - Generated conversation name
+   */
+  generateConversationName(message) {
+    return database.generateConversationName(message);
   }
 
   /**

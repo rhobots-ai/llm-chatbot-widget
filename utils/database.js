@@ -48,6 +48,7 @@ class DatabaseManager {
           id TEXT PRIMARY KEY,
           user_id TEXT,
           thread_id TEXT,
+          name TEXT,
           provider TEXT DEFAULT 'openai',
           assistant_id TEXT,
           assistant_type TEXT DEFAULT 'default',
@@ -107,8 +108,18 @@ class DatabaseManager {
                 console.warn('Warning adding metabase_question_url column:', alterErr.message);
               }
               
-              console.log('✅ Database tables created successfully');
-              resolve();
+              // Add the name column if it doesn't exist (migration)
+              this.db.run(`
+                ALTER TABLE conversations ADD COLUMN name TEXT
+              `, (nameAlterErr) => {
+                // Ignore error if column already exists
+                if (nameAlterErr && !nameAlterErr.message.includes('duplicate column name')) {
+                  console.warn('Warning adding name column:', nameAlterErr.message);
+                }
+                
+                console.log('✅ Database tables created successfully');
+                resolve();
+              });
             });
           });
         });
@@ -119,18 +130,19 @@ class DatabaseManager {
   /**
    * Create a new conversation
    */
-  async createConversation(conversationId, userId = null, metadata = {}, metabaseQuestionUrl = null) {
+  async createConversation(conversationId, userId = null, metadata = {}, metabaseQuestionUrl = null, name = null) {
     return new Promise((resolve, reject) => {
       const stmt = this.db.prepare(`
         INSERT INTO conversations (
-          id, user_id, created_at, last_activity, metadata, metabase_question_url
-        ) VALUES (?, ?, ?, ?, ?, ?)
+          id, user_id, name, created_at, last_activity, metadata, metabase_question_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
       const now = Date.now();
       stmt.run([
         conversationId,
         userId,
+        name,
         now,
         now,
         JSON.stringify(metadata),
@@ -215,6 +227,58 @@ class DatabaseManager {
         }
       );
     });
+  }
+
+  /**
+   * Update conversation name
+   */
+  async updateConversationName(conversationId, name) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE conversations SET name = ?, last_activity = ? WHERE id = ?',
+        [name, Date.now(), conversationId],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Generate conversation name from first user message
+   */
+  generateConversationName(firstUserMessage) {
+    if (!firstUserMessage || typeof firstUserMessage !== 'string') {
+      return 'New Conversation';
+    }
+
+    // Clean the message
+    let name = firstUserMessage.trim();
+    
+    // Remove common question words and phrases
+    name = name.replace(/^(what|how|why|when|where|who|can|could|would|should|is|are|do|does|did|tell me|help me|explain|show me)\s+/i, '');
+    
+    // Remove special characters and extra spaces
+    name = name.replace(/[^\w\s-]/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // Capitalize first letter
+    name = name.charAt(0).toUpperCase() + name.slice(1);
+    
+    // Limit length and add ellipsis if needed
+    if (name.length > 50) {
+      name = name.substring(0, 47) + '...';
+    }
+    
+    // Fallback if name is too short or empty
+    if (name.length < 3) {
+      return 'New Conversation';
+    }
+    
+    return name;
   }
 
   /**

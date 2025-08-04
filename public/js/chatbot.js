@@ -2629,8 +2629,16 @@ Please help me fix it.`;
       let historyHTML = '';
       conversations.forEach(conversation => {
         const date = new Date(conversation.lastActivity).toLocaleDateString();
-        const title = `Conversation ${conversation.id.substring(0, 8)}...`;
-        let preview = `${conversation.messageCount} messages`;
+        const time = new Date(conversation.lastActivity).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const title = conversation.name || 'Untitled Conversation';
+        let preview = `${conversation.messageCount} message${conversation.messageCount !== 1 ? 's' : ''}`;
+        
+        // Add time to preview if it's from today
+        const today = new Date().toDateString();
+        const conversationDate = new Date(conversation.lastActivity).toDateString();
+        if (today === conversationDate) {
+          preview += ` • ${time}`;
+        }
         
         // Add Metabase question link if available
         let metabaseLink = '';
@@ -2643,7 +2651,7 @@ Please help me fix it.`;
         }
         
         historyHTML += `
-          <div class="chatbot-widget-history-item" data-thread-id="${conversation.threadId}">
+          <div class="chatbot-widget-history-item" data-thread-id="${conversation.threadId}" data-conversation-id="${conversation.id}">
             <div class="chatbot-widget-history-title">${title}</div>
             <div class="chatbot-widget-history-preview">${preview}</div>
             ${metabaseLink}
@@ -2658,8 +2666,12 @@ Please help me fix it.`;
       historyView.querySelectorAll('.chatbot-widget-history-item').forEach(item => {
         item.addEventListener('click', () => {
           const threadId = item.dataset.threadId;
+          const conversationId = item.dataset.conversationId;
           if (threadId) {
             loadConversationByThread(threadId);
+          } else if (conversationId) {
+            // Fallback to loading by conversation ID if no thread ID
+            loadConversationById(conversationId);
           }
         });
       });
@@ -2753,6 +2765,94 @@ Please help me fix it.`;
       
     } catch (error) {
       console.error('Error loading conversation:', error);
+      messagesContainer.innerHTML = '';
+      addMessage('Failed to load conversation. Please try again.', 'bot');
+      showChatView();
+    }
+  }
+
+  // Load a conversation by conversation ID (fallback when no thread ID)
+  async function loadConversationById(conversationId) {
+    try {
+      // Show loading state
+      messagesContainer.innerHTML = '<div class="chatbot-widget-no-history">Loading conversation...</div>';
+      
+      // Fetch conversation from backend
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/conversations/${conversationId}`);
+      
+      if (!response.ok) {
+        throw new Error('Failed to load conversation');
+      }
+      
+      const conversation = await response.json();
+      
+      // Set current conversation state
+      currentConversationId = conversation.id;
+      currentThreadId = conversation.threadId;
+      messageHistory = conversation.messages || [];
+      
+      // Clear and rebuild messages container
+      messagesContainer.innerHTML = '';
+      messageHistory.forEach(msg => {
+        const messageElement = document.createElement('div');
+        messageElement.className = `chatbot-widget-message ${msg.sender}`;
+        
+        // Parse markdown for bot messages, keep plain text for user messages
+        if (msg.sender === 'bot') {
+          messageElement.innerHTML = parseMarkdown(msg.text);
+          
+          // Add event listeners for copy and run buttons
+          setTimeout(() => {
+            const copyButtons = messageElement.querySelectorAll('.chatbot-code-copy');
+            copyButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  copyCodeToClipboard(codeId, button);
+                }
+              });
+            });
+            
+            const runButtons = messageElement.querySelectorAll('.chatbot-code-run');
+            runButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  executeSQLQuery(codeId, button);
+                }
+              });
+            });
+            
+            const pasteButtons = messageElement.querySelectorAll('.chatbot-code-paste');
+            pasteButtons.forEach(button => {
+              button.addEventListener('click', (e) => {
+                e.preventDefault();
+                const codeId = button.getAttribute('data-code-id');
+                if (codeId) {
+                  pasteToCodeMirror(codeId, button);
+                }
+              });
+            });
+
+            updatePasteButtonVisibility();
+          }, 0);
+        } else {
+          messageElement.textContent = msg.text;
+        }
+        
+        messagesContainer.appendChild(messageElement);
+      });
+      
+      // Switch back to chat view
+      showChatView();
+      scrollToBottom();
+      messageInput.focus();
+      
+    } catch (error) {
+      console.error('Error loading conversation by ID:', error);
       messagesContainer.innerHTML = '';
       addMessage('Failed to load conversation. Please try again.', 'bot');
       showChatView();
