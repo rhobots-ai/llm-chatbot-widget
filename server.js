@@ -148,6 +148,7 @@ app.get('/chat/:conversationId', async (req, res) => {
           </footer>
         </div>
         
+        <script src="/js/marked.umd.js"></script>
         <script>
           // Load conversation data
           const conversationData = ${JSON.stringify({
@@ -157,6 +158,445 @@ app.get('/chat/:conversationId', async (req, res) => {
             messageCount: conversation.message_count,
             messages: conversation.messages
           })};
+          
+          // Configure marked for security
+          if (window.marked && window.marked.setOptions) {
+            window.marked.setOptions({
+              sanitize: false, // We'll handle sanitization ourselves
+              breaks: true,    // Convert \\n to <br>
+              gfm: true       // GitHub Flavored Markdown
+            });
+          }
+          
+          // HTML sanitization function to prevent XSS
+          function sanitizeHtml(html) {
+            // Create a temporary div to parse HTML
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            
+            // Remove script tags and event handlers
+            const scripts = temp.querySelectorAll('script');
+            scripts.forEach(script => script.remove());
+            
+            // Remove dangerous attributes
+            const allElements = temp.querySelectorAll('*');
+            allElements.forEach(element => {
+              // Remove event handler attributes
+              Array.from(element.attributes).forEach(attr => {
+                if (attr.name.startsWith('on')) {
+                  element.removeAttribute(attr.name);
+                }
+              });
+              
+              // Only allow safe attributes for links
+              if (element.tagName === 'A') {
+                const href = element.getAttribute('href');
+                element.removeAttribute('href');
+                if (href && (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('mailto:'))) {
+                  element.setAttribute('href', href);
+                  element.setAttribute('target', '_blank');
+                  element.setAttribute('rel', 'noopener noreferrer');
+                }
+              }
+            });
+            
+            return temp.innerHTML;
+          }
+          
+          // Markdown parser using marked library with fallback
+          function parseMarkdown(text) {
+            try {
+              // Use marked library if available
+              if (window.marked && typeof window.marked.parse === 'function') {
+                const html = window.marked.parse(text);
+                const sanitizedHtml = sanitizeHtml(html);
+                return enhanceCodeBlocks(sanitizedHtml);
+              }
+            } catch (error) {
+              console.warn('Error using marked library, falling back to simple parser:', error);
+            }
+            
+            // Fallback to simple markdown parsing
+            return parseMarkdownSimple(text);
+          }
+          
+          // Simple fallback markdown parser
+          function parseMarkdownSimple(text) {
+            // Escape HTML to prevent XSS
+            text = text.replace(/&/g, '&amp;')
+                       .replace(/</g, '&lt;')
+                       .replace(/>/g, '&gt;')
+                       .replace(/"/g, '&quot;')
+                       .replace(/'/g, '&#39;');
+
+            // Parse markdown elements
+            // Bold text **text** or __text__
+            text = text.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+            text = text.replace(/__(.*?)__/g, '<strong>$1</strong>');
+            
+            // Italic text *text* or _text_
+            text = text.replace(/\\*(.*?)\\*/g, '<em>$1</em>');
+            text = text.replace(/\\b_([^\\s_]+)_\\b/g, '<em>$1</em>');
+
+            // Code blocks with language detection \`\`\`language\\ncode\`\`\`
+            text = text.replace(/\`\`\`(\\w+)?\\n?([\\s\\S]*?)\`\`\`/g, (match, lang, code) => {
+              const language = lang || 'text';
+              const codeBlockId = \`chatbot-code-\${Date.now()}-\${Math.random().toString(36).substr(2, 9)}\`;
+              const isSQLBlock = ['sql', 'postgres', 'postgresql', 'mysql', 'sqlite'].includes(language.toLowerCase());
+              
+              let headerButtons = \`
+                <button class="chatbot-code-copy" data-code-id="\${codeBlockId}" title="Copy code">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                  </svg>
+                </button>
+              \`;
+              
+              if (isSQLBlock) {
+                headerButtons = \`
+                  <button class="chatbot-code-run" data-code-id="\${codeBlockId}" title="Run SQL query">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                \` + headerButtons;
+              }
+              
+              return \`<div class="chatbot-code-block">
+                <div class="chatbot-code-header">
+                  <span class="chatbot-code-language">\${language}</span>
+                  <div class="chatbot-code-actions">
+                    \${headerButtons}
+                  </div>
+                </div>
+                <pre class="chatbot-code-content" id="\${codeBlockId}"><code>\${code.trim()}</code></pre>
+                <div class="chatbot-sql-results" id="\${codeBlockId}-results" style="display: none;"></div>
+              </div>\`;
+            });
+            
+            // Inline code \`code\`
+            text = text.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+            
+            // Links [text](url)
+            text = text.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            
+            // Line breaks (double newline becomes paragraph break)
+            text = text.replace(/\\n\\n/g, '</p><p>');
+            text = '<p>' + text + '</p>';
+            
+            // Single line breaks become <br>
+            text = text.replace(/\\n/g, '<br>');
+            
+            // Handle lists
+            text = text.replace(/^[\\*\\-]\\s+(.+)$/gm, '<li>$1</li>');
+            text = text.replace(/(<li>.*<\\/li>)/s, '<ul>$1</ul>');
+            
+            // Ordered lists
+            text = text.replace(/^\\d+\\.\\s+(.+)$/gm, '<li>$1</li>');
+            
+            // Headers
+            text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+            text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+            text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+            
+            // Clean up empty paragraphs
+            text = text.replace(/<p><\\/p>/g, '');
+            text = text.replace(/<p>\\s*<\\/p>/g, '');
+            
+            return text;
+          }
+          
+          // Enhance code blocks with copy functionality and SQL run button
+          function enhanceCodeBlocks(html) {
+            // Create a temporary div to parse HTML
+            const temp = document.createElement('div');
+            temp.innerHTML = html;
+            
+            // Find all pre elements (code blocks)
+            const preElements = temp.querySelectorAll('pre');
+            
+            preElements.forEach((pre, index) => {
+              const code = pre.querySelector('code');
+              if (!code) return;
+              
+              // Extract language from class attribute (e.g., language-javascript)
+              let language = 'text';
+              const codeClasses = code.className || '';
+              const languageMatch = codeClasses.match(/language-(\\w+)/);
+              if (languageMatch) {
+                language = languageMatch[1];
+              }
+              
+              // Get the code content
+              const codeContent = code.textContent || code.innerText || '';
+              
+              // Check if this is a SQL code block
+              const isSQLBlock = ['sql', 'postgres', 'postgresql', 'mysql', 'sqlite'].includes(language.toLowerCase());
+              
+              // Create enhanced code block structure
+              const codeBlockId = \`chatbot-code-\${Date.now()}-\${index}\`;
+              const enhancedCodeBlock = document.createElement('div');
+              enhancedCodeBlock.className = 'chatbot-code-block';
+              
+              // Create header buttons HTML
+              let headerButtons = \`
+                <button class="chatbot-code-copy" data-code-id="\${codeBlockId}" title="Copy code">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                  </svg>
+                </button>
+              \`;
+              
+              // Add run button for SQL blocks
+              if (isSQLBlock) {
+                headerButtons = \`
+                  <button class="chatbot-code-run" data-code-id="\${codeBlockId}" title="Run SQL query">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                  </button>
+                \` + headerButtons;
+              }
+              
+              enhancedCodeBlock.innerHTML = \`
+                <div class="chatbot-code-header">
+                  <span class="chatbot-code-language">\${language}</span>
+                  <div class="chatbot-code-actions">
+                    \${headerButtons}
+                  </div>
+                </div>
+                <pre class="chatbot-code-content" id="\${codeBlockId}"><code>\${codeContent}</code></pre>
+                <div class="chatbot-sql-results" id="\${codeBlockId}-results" style="display: none;"></div>
+              \`;
+              
+              // Replace the original pre element
+              pre.parentNode.replaceChild(enhancedCodeBlock, pre);
+            });
+            
+            return temp.innerHTML;
+          }
+          
+          // Copy code to clipboard
+          async function copyCodeToClipboard(codeId, button) {
+            try {
+              const codeElement = document.getElementById(codeId);
+              if (!codeElement) {
+                console.error('Code element not found:', codeId);
+                return;
+              }
+              
+              const codeContent = codeElement.querySelector('code');
+              const textToCopy = codeContent ? codeContent.textContent : codeElement.textContent;
+              
+              // Use modern clipboard API if available
+              if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(textToCopy);
+              } else {
+                // Fallback for older browsers
+                const textArea = document.createElement('textarea');
+                textArea.value = textToCopy;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                textArea.remove();
+              }
+              
+              // Show visual feedback
+              const originalContent = button.innerHTML;
+              button.innerHTML = \`
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+              \`;
+              button.style.color = '#10b981';
+              
+              // Reset button after 2 seconds
+              setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.style.color = '';
+              }, 2000);
+              
+            } catch (error) {
+              console.error('Failed to copy code:', error);
+              
+              // Show error feedback
+              const originalContent = button.innerHTML;
+              button.innerHTML = \`
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+              \`;
+              button.style.color = '#ef4444';
+              
+              // Reset button after 2 seconds
+              setTimeout(() => {
+                button.innerHTML = originalContent;
+                button.style.color = '';
+              }, 2000);
+            }
+          }
+          
+          // Execute SQL query
+          async function executeSQLQuery(codeId, button) {
+            try {
+              const codeElement = document.getElementById(codeId);
+              if (!codeElement) {
+                console.error('Code element not found:', codeId);
+                return;
+              }
+              
+              const codeContent = codeElement.querySelector('code');
+              const sqlQuery = codeContent ? codeContent.textContent.trim() : '';
+              
+              if (!sqlQuery) {
+                console.error('No SQL query found');
+                return;
+              }
+              
+              // Show loading state
+              const originalContent = button.innerHTML;
+              button.innerHTML = \`
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/>
+                  <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" fill="none"/>
+                </svg>
+              \`;
+              button.disabled = true;
+              button.style.color = '#6b7280';
+              
+              // Get results container
+              const resultsContainer = document.getElementById(\`\${codeId}-results\`);
+              if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+                resultsContainer.innerHTML = '';
+              }
+              
+              // Execute SQL query
+              const response = await fetch('/api/sql/execute', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  query: sqlQuery,
+                  timeout: 30000,
+                  limit: 100
+                })
+              });
+              
+              const result = await response.json();
+              
+              // Reset button
+              button.innerHTML = originalContent;
+              button.disabled = false;
+              button.style.color = '';
+              
+              if (response.ok && result.success) {
+                // Show successful results
+                showSQLResults(result, codeId);
+              } else {
+                // Show error
+                const errorMessage = result.message + ': ' + (result.details?.[0] || 'Unknown SQL error');
+                showSQLError(errorMessage, codeId);
+              }
+              
+            } catch (error) {
+              console.error('SQL execution error:', error);
+              
+              // Reset button
+              const originalContent = \`
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+              \`;
+              button.innerHTML = originalContent;
+              button.disabled = false;
+              button.style.color = '';
+              
+              // Show error
+              showSQLError(error.message || 'Failed to execute SQL query', codeId);
+            }
+          }
+          
+          // Show SQL results
+          function showSQLResults(result, codeId) {
+            const resultsContainer = document.getElementById(\`\${codeId}-results\`);
+            if (!resultsContainer) return;
+            
+            const { data, rowCount, executionTime, truncated } = result;
+            
+            let resultsHTML = \`
+              <div class="chatbot-sql-results-header">
+                <div class="chatbot-sql-results-info">
+                  <span class="chatbot-sql-success-icon">✓</span>
+                  <span>Query executed successfully</span>
+                  <span class="chatbot-sql-meta">\${rowCount} rows in \${executionTime}ms</span>
+                </div>
+                <button class="chatbot-sql-toggle" data-toggle-target="\${codeId}-results-content">▼</button>
+              </div>
+              <div class="chatbot-sql-results-content" id="\${codeId}-results-content">
+            \`;
+            
+            if (data && data.length > 0) {
+              // Create table
+              const columns = Object.keys(data[0]);
+              resultsHTML += \`
+                <div class="chatbot-sql-table-container">
+                  <table class="chatbot-sql-table">
+                    <thead>
+                      <tr>
+                        \${columns.map(col => \`<th>\${col}</th>\`).join('')}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      \${data.map(row => \`
+                        <tr>
+                          \${columns.map(col => \`<td>\${row[col] !== null ? String(row[col]) : '<em>null</em>'}</td>\`).join('')}
+                        </tr>
+                      \`).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              \`;
+              
+              if (truncated) {
+                resultsHTML += \`<div class="chatbot-sql-warning">Results truncated to \${data.length} rows</div>\`;
+              }
+            } else {
+              resultsHTML += \`<div class="chatbot-sql-empty">No data returned</div>\`;
+            }
+            
+            resultsHTML += \`</div>\`;
+            
+            resultsContainer.innerHTML = resultsHTML;
+            resultsContainer.style.display = 'block';
+          }
+          
+          // Show SQL error
+          function showSQLError(errorMessage, codeId) {
+            const resultsContainer = document.getElementById(\`\${codeId}-results\`);
+            if (!resultsContainer) return;
+            
+            const resultsHTML = \`
+              <div class="chatbot-sql-results-header chatbot-sql-error-header">
+                <div class="chatbot-sql-results-info">
+                  <span class="chatbot-sql-error-icon">✗</span>
+                  <span>Query failed</span>
+                </div>
+                <button class="chatbot-sql-toggle" data-toggle-target="\${codeId}-results-content">▼</button>
+              </div>
+              <div class="chatbot-sql-results-content" id="\${codeId}-results-content">
+                <div class="chatbot-sql-error-message">\${errorMessage}</div>
+              </div>
+            \`;
+            
+            resultsContainer.innerHTML = resultsHTML;
+            resultsContainer.style.display = 'block';
+          }
           
           // Render messages
           function renderMessages() {
@@ -168,14 +608,60 @@ app.get('/chat/:conversationId', async (req, res) => {
               
               const timestamp = new Date(message.timestamp).toLocaleTimeString();
               
+              // Parse markdown for bot messages, keep plain text for user messages
+              const messageContent = message.sender === 'bot' ? parseMarkdown(message.text) : escapeHtml(message.text);
+              
               messageEl.innerHTML = \`
                 <div class="message-content">
-                  <div class="message-text">\${escapeHtml(message.text)}</div>
+                  <div class="message-text">\${messageContent}</div>
                   <div class="message-time">\${timestamp}</div>
                 </div>
               \`;
               
               container.appendChild(messageEl);
+              
+              // Add event listeners for code blocks if this is a bot message
+              if (message.sender === 'bot') {
+                setTimeout(() => {
+                  const copyButtons = messageEl.querySelectorAll('.chatbot-code-copy');
+                  copyButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                      e.preventDefault();
+                      const codeId = button.getAttribute('data-code-id');
+                      if (codeId) {
+                        copyCodeToClipboard(codeId, button);
+                      }
+                    });
+                  });
+                  
+                  const runButtons = messageEl.querySelectorAll('.chatbot-code-run');
+                  runButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                      e.preventDefault();
+                      const codeId = button.getAttribute('data-code-id');
+                      if (codeId) {
+                        executeSQLQuery(codeId, button);
+                      }
+                    });
+                  });
+                  
+                  // Add event listeners for SQL results toggle buttons
+                  const toggleButtons = messageEl.querySelectorAll('.chatbot-sql-toggle');
+                  toggleButtons.forEach(button => {
+                    button.addEventListener('click', (e) => {
+                      e.preventDefault();
+                      const targetId = button.getAttribute('data-toggle-target');
+                      const targetElement = document.getElementById(targetId);
+                      
+                      if (targetElement) {
+                        const isVisible = targetElement.style.display !== 'none';
+                        targetElement.style.display = isVisible ? 'none' : 'block';
+                        button.textContent = isVisible ? '▼' : '▲';
+                      }
+                    });
+                  });
+                }, 0);
+              }
             });
           }
           
