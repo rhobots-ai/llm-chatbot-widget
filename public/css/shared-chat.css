@@ -95,7 +95,7 @@ body {
   font-size: 0.95rem;
   line-height: 1.5;
   word-wrap: break-word;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 .message.user .message-text {
@@ -541,11 +541,9 @@ body {
 .message-text pre {
   background: rgba(0, 0, 0, 0.05);
   padding: 0.75rem;
-  border-radius: 8px;
   overflow-x: auto;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 0.85rem;
-  margin: 0.5rem 0;
 }
 
 .message.user .message-text pre {
