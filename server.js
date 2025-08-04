@@ -142,7 +142,7 @@ app.post('/api/chat', async (req, res) => {
       ));
     }
 
-    const { message, history, provider, assistantId, assistantType, conversationId, threadId } = validation.data;
+    const { message, history, provider, assistantId, assistantType, conversationId, threadId, metabaseQuestionUrl } = validation.data;
 
     // Determine which assistant configuration to use
     let assistantConfig;
@@ -181,11 +181,18 @@ app.post('/api/chat', async (req, res) => {
 
     // Create new conversation if none exists
     if (!currentConversationId) {
-      currentConversationId = await conversationManager.createConversation(req.ip, {
+      const metadata = {
         provider: finalProvider,
         assistantId: finalAssistantId,
         assistantType: assistantType || 'default'
-      });
+      };
+      
+      // Add Metabase question URL to metadata if provided
+      if (metabaseQuestionUrl) {
+        metadata.metabaseQuestionUrl = metabaseQuestionUrl;
+      }
+      
+      currentConversationId = await conversationManager.createConversation(req.ip, metadata);
     }
 
     // Add user message to conversation
@@ -280,7 +287,7 @@ async function handleStreamingChat(req, res) {
       ));
     }
 
-    const { message, history, provider, assistantId, assistantType, conversationId, threadId } = validation.data;
+    const { message, history, provider, assistantId, assistantType, conversationId, threadId, metabaseQuestionUrl } = validation.data;
 
     // Set up Server-Sent Events headers
     res.writeHead(200, {
@@ -331,11 +338,18 @@ async function handleStreamingChat(req, res) {
 
     // Create new conversation if none exists
     if (!currentConversationId) {
-      currentConversationId = await conversationManager.createConversation(req.ip, {
+      const metadata = {
         provider: finalProvider,
         assistantId: finalAssistantId,
         assistantType: assistantType || 'default'
-      });
+      };
+      
+      // Add Metabase question URL to metadata if provided
+      if (metabaseQuestionUrl) {
+        metadata.metabaseQuestionUrl = metabaseQuestionUrl;
+      }
+      
+      currentConversationId = await conversationManager.createConversation(req.ip, metadata);
     }
 
     // Add user message to conversation
@@ -501,7 +515,8 @@ app.get('/api/users/:userId/conversations', async (req, res) => {
         created: conv.created_at,
         lastActivity: conv.last_activity,
         messageCount: conv.message_count,
-        metadata: conv.metadata
+        metadata: conv.metadata,
+        metabaseQuestionUrl: conv.metabase_question_url
       })),
       pagination: {
         limit,

@@ -54,7 +54,8 @@ class DatabaseManager {
           created_at INTEGER,
           last_activity INTEGER,
           message_count INTEGER DEFAULT 0,
-          metadata TEXT
+          metadata TEXT,
+          metabase_question_url TEXT
         )
       `;
 
@@ -74,6 +75,7 @@ class DatabaseManager {
         CREATE INDEX IF NOT EXISTS idx_conversations_user_id ON conversations(user_id);
         CREATE INDEX IF NOT EXISTS idx_conversations_thread_id ON conversations(thread_id);
         CREATE INDEX IF NOT EXISTS idx_conversations_last_activity ON conversations(last_activity);
+        CREATE INDEX IF NOT EXISTS idx_conversations_metabase_url ON conversations(metabase_question_url);
         CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
         CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON messages(timestamp);
       `;
@@ -96,8 +98,18 @@ class DatabaseManager {
               return;
             }
 
-            console.log('✅ Database tables created successfully');
-            resolve();
+            // Add the metabase_question_url column if it doesn't exist (migration)
+            this.db.run(`
+              ALTER TABLE conversations ADD COLUMN metabase_question_url TEXT
+            `, (alterErr) => {
+              // Ignore error if column already exists
+              if (alterErr && !alterErr.message.includes('duplicate column name')) {
+                console.warn('Warning adding metabase_question_url column:', alterErr.message);
+              }
+              
+              console.log('✅ Database tables created successfully');
+              resolve();
+            });
           });
         });
       });
@@ -107,12 +119,12 @@ class DatabaseManager {
   /**
    * Create a new conversation
    */
-  async createConversation(conversationId, userId = null, metadata = {}) {
+  async createConversation(conversationId, userId = null, metadata = {}, metabaseQuestionUrl = null) {
     return new Promise((resolve, reject) => {
       const stmt = this.db.prepare(`
         INSERT INTO conversations (
-          id, user_id, created_at, last_activity, metadata
-        ) VALUES (?, ?, ?, ?, ?)
+          id, user_id, created_at, last_activity, metadata, metabase_question_url
+        ) VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const now = Date.now();
@@ -121,7 +133,8 @@ class DatabaseManager {
         userId,
         now,
         now,
-        JSON.stringify(metadata)
+        JSON.stringify(metadata),
+        metabaseQuestionUrl
       ], function(err) {
         if (err) {
           reject(err);

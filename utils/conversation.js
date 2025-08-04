@@ -28,7 +28,8 @@ class ConversationManager {
   async createConversation(userId = null, metadata = {}) {
     await this.ensureInitialized();
     const conversationId = this.generateId();
-    await database.createConversation(conversationId, userId, metadata);
+    const metabaseQuestionUrl = metadata.metabaseQuestionUrl || null;
+    await database.createConversation(conversationId, userId, metadata, metabaseQuestionUrl);
     return conversationId;
   }
 

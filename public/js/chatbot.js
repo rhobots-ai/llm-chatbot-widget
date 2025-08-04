@@ -43,6 +43,7 @@
   // Metabase integration state
   let metabaseQuestionId = null;
   let metabaseQuestionData = null;
+  let metabaseQuestionUrl = null;
   let isMetabasePage = false;
   let includeMetabaseQuery = false;
 
@@ -1511,6 +1512,11 @@
         requestBody.threadId = currentThreadId;
       }
 
+      // Include Metabase question URL if we have one and this is a new conversation
+      if (metabaseQuestionUrl && !currentConversationId) {
+        requestBody.metabaseQuestionUrl = metabaseQuestionUrl;
+      }
+
       let streamingMessageElement = null;
       let accumulatedContent = '';
       let hasStarted = false;
@@ -2624,12 +2630,23 @@ Please help me fix it.`;
       conversations.forEach(conversation => {
         const date = new Date(conversation.lastActivity).toLocaleDateString();
         const title = `Conversation ${conversation.id.substring(0, 8)}...`;
-        const preview = `${conversation.messageCount} messages`;
+        let preview = `${conversation.messageCount} messages`;
+        
+        // Add Metabase question link if available
+        let metabaseLink = '';
+        if (conversation.metabaseQuestionUrl) {
+          metabaseLink = `<div class="chatbot-widget-history-metabase">
+            <a href="${conversation.metabaseQuestionUrl}" target="_blank" rel="noopener noreferrer" title="View Metabase Question">
+              📊 Metabase Question
+            </a>
+          </div>`;
+        }
         
         historyHTML += `
           <div class="chatbot-widget-history-item" data-thread-id="${conversation.threadId}">
             <div class="chatbot-widget-history-title">${title}</div>
             <div class="chatbot-widget-history-preview">${preview}</div>
+            ${metabaseLink}
             <div class="chatbot-widget-history-date">${date}</div>
           </div>
         `;
@@ -2844,13 +2861,16 @@ Please help me fix it.`;
     
     if (match) {
       metabaseQuestionId = match[1];
+      metabaseQuestionUrl = currentUrl;
       isMetabasePage = true;
       console.log(`🔍 Detected Metabase question page: ${metabaseQuestionId}`);
+      console.log(`🔗 Metabase question URL: ${metabaseQuestionUrl}`);
       return true;
     }
     
     isMetabasePage = false;
     metabaseQuestionId = null;
+    metabaseQuestionUrl = null;
     return false;
   }
 
