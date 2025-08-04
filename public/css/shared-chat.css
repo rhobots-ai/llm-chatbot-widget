@@ -539,7 +539,7 @@ body {
 
 /* Fallback code blocks in messages (for simple pre tags) */
 .message-text pre {
-  background: rgba(0, 0, 0, 0.05);
+  background: #1e293b;
   padding: 0.75rem;
   overflow-x: auto;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
@@ -575,8 +575,8 @@ body {
 }
 
 .message.bot .message-text code {
-  background: #e2e8f0;
-  color: #1e293b;
+  background: none;
+  color: #e2e8f0;
   padding: 2px 4px;
   border-radius: 3px;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
