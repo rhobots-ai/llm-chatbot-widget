@@ -152,96 +152,134 @@ class OpenAIProvider extends BaseProvider {
         });
       }
 
-      // Run the assistant
-      const run = await this.client.beta.threads.runs.create(threadId, {
-        assistant_id: assistantId
+      // Create streaming run
+      const stream = await this.client.beta.threads.runs.create(threadId, {
+        assistant_id: assistantId,
+        stream: true
       });
 
-      // Poll for completion with streaming updates
-      let runStatus = await this.client.beta.threads.runs.retrieve(threadId, run.id);
-      const maxAttempts = 30; // 30 seconds timeout
-      let attempts = 0;
-      let lastMessageContent = '';
-      
-      while (runStatus.status === 'in_progress' || runStatus.status === 'queued') {
-        if (attempts >= maxAttempts) {
-          throw new Error('Assistant response timeout');
-        }
+      let finalMessage = '';
+      let currentMessageId = null;
+      let runId = null;
 
-        // Emit progress event
-        if (onProgress) {
-          onProgress({
-            type: 'progress',
-            status: runStatus.status,
-            step: attempts + 1,
-            maxSteps: maxAttempts
-          });
-        }
+      // Process streaming events
+      for await (const event of stream) {
+        try {
+          // Handle different event types
+          switch (event.event) {
+            case 'thread.run.created':
+              runId = event.data.id;
+              if (onProgress) {
+                onProgress({
+                  type: 'progress',
+                  status: 'created',
+                  threadId: threadId
+                });
+              }
+              break;
 
-        // Check for partial messages during processing
-        if (runStatus.status === 'in_progress') {
-          try {
-            const messages = await this.client.beta.threads.messages.list(threadId, {
-              order: 'desc',
-              limit: 1
-            });
+            case 'thread.run.in_progress':
+              if (onProgress) {
+                onProgress({
+                  type: 'progress',
+                  status: 'in_progress',
+                  threadId: threadId
+                });
+              }
+              break;
 
-            const latestMessage = messages.data[0];
-            if (latestMessage && latestMessage.role === 'assistant') {
-              const textContent = latestMessage.content.find(content => content.type === 'text');
-              if (textContent && textContent.text.value !== lastMessageContent) {
-                lastMessageContent = textContent.text.value;
-                
-                // Emit partial content
-                if (onProgress) {
-                  onProgress({
-                    type: 'message_delta',
-                    content: lastMessageContent,
-                    threadId: threadId
-                  });
+            case 'thread.message.created':
+              currentMessageId = event.data.id;
+              break;
+
+            case 'thread.message.delta':
+              // Handle message content deltas (real streaming)
+              if (event.data.delta && event.data.delta.content) {
+                for (const contentDelta of event.data.delta.content) {
+                  if (contentDelta.type === 'text' && contentDelta.text && contentDelta.text.value) {
+                    finalMessage += contentDelta.text.value;
+                    
+                    // Emit streaming content
+                    if (onProgress) {
+                      onProgress({
+                        type: 'message_delta',
+                        content: finalMessage,
+                        threadId: threadId
+                      });
+                    }
+                  }
                 }
               }
-            }
-          } catch (partialError) {
-            // Ignore errors when checking for partial content
-            console.debug('Error checking partial content:', partialError.message);
+              break;
+
+            case 'thread.message.completed':
+              // Message is complete
+              if (onProgress) {
+                onProgress({
+                  type: 'progress',
+                  status: 'message_completed',
+                  threadId: threadId
+                });
+              }
+              break;
+
+            case 'thread.run.completed':
+              // Run is complete
+              if (onProgress) {
+                onProgress({
+                  type: 'progress',
+                  status: 'completed',
+                  threadId: threadId
+                });
+              }
+              break;
+
+            case 'thread.run.failed':
+              const errorMessage = event.data.last_error && event.data.last_error.message 
+                ? event.data.last_error.message 
+                : 'Unknown error';
+              throw new Error(`Assistant run failed: ${errorMessage}`);
+
+            case 'thread.run.requires_action':
+              throw new Error('Assistant requires action (function calling not implemented)');
+
+            case 'error':
+              throw new Error(`Stream error: ${event.data.message || 'Unknown streaming error'}`);
+
+            default:
+              // Log unknown events for debugging
+              console.debug('Unknown stream event:', event.event);
+              break;
           }
+        } catch (eventError) {
+          console.error('Error processing stream event:', eventError);
+          throw eventError;
         }
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        runStatus = await this.client.beta.threads.runs.retrieve(threadId, run.id);
-        attempts++;
       }
 
-      if (runStatus.status === 'failed') {
-        const errorMessage = runStatus.last_error && runStatus.last_error.message 
-          ? runStatus.last_error.message 
-          : 'Unknown error';
-        throw new Error(`Assistant run failed: ${errorMessage}`);
+      // If we didn't get any content from streaming, fall back to getting the final message
+      if (!finalMessage && currentMessageId) {
+        try {
+          const messages = await this.client.beta.threads.messages.list(threadId, {
+            order: 'desc',
+            limit: 1
+          });
+
+          const assistantMessage = messages.data[0];
+          if (assistantMessage && assistantMessage.role === 'assistant') {
+            const textContent = assistantMessage.content.find(content => content.type === 'text');
+            if (textContent) {
+              finalMessage = textContent.text.value;
+            }
+          }
+        } catch (fallbackError) {
+          console.warn('Failed to get final message as fallback:', fallbackError.message);
+        }
       }
 
-      if (runStatus.status === 'requires_action') {
-        throw new Error('Assistant requires action (function calling not implemented)');
+      if (!finalMessage) {
+        throw new Error('No assistant response received');
       }
-
-      // Get the final assistant's response
-      const messages = await this.client.beta.threads.messages.list(threadId, {
-        order: 'desc',
-        limit: 1
-      });
-
-      const assistantMessage = messages.data[0];
-      if (!assistantMessage || assistantMessage.role !== 'assistant') {
-        throw new Error('No assistant response found');
-      }
-
-      // Extract text content
-      const textContent = assistantMessage.content.find(content => content.type === 'text');
-      if (!textContent) {
-        throw new Error('No text content in assistant response');
-      }
-
-      const finalMessage = textContent.text.value;
 
       // Store thread ID for future use
       this.threads.set(threadId, {

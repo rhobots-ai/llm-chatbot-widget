@@ -18,7 +18,7 @@
     maxHeight: '500px',
     width: '500px',
     zIndex: 10000,
-    view: 'bubble', // 'bubble' or 'sidesheet'
+    view: 'sidesheet', // 'bubble' or 'sidesheet'
     enableStreaming: true, // Enable/disable streaming responses
     // CSP Configuration
     nonce: null, // CSP nonce for scripts and styles (e.g., 'abc123')
