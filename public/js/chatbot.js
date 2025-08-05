@@ -1715,18 +1715,6 @@
           resolve();
         }
       });
-
-      // Cleanup on timeout
-      setTimeout(() => {
-        hideTyping();
-        
-        if (!hasStarted) {
-          reject(new Error('Streaming timeout'));
-        } else {
-          addMessage('Request timed out. Please try again.', 'bot');
-          resolve();
-        }
-      }, 120000); // 120 second timeout
     });
   }
 
@@ -1788,7 +1776,13 @@
   function createStreamingMessage() {
     const messageElement = document.createElement('div');
     messageElement.className = 'chatbot-widget-message bot streaming';
-    messageElement.innerHTML = '<span class="streaming-cursor">▋</span>';
+    messageElement.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div class="chatbot-widget-typing-dot"></div>
+        <div class="chatbot-widget-typing-dot"></div>
+        <div class="chatbot-widget-typing-dot"></div>
+      </div>
+    `;
     
     messagesContainer.appendChild(messageElement);
     scrollToBottom();
@@ -1800,9 +1794,15 @@
   function updateStreamingMessage(messageElement, content) {
     if (!messageElement) return;
     
-    // Parse markdown and add streaming cursor
+    // Parse markdown and add three dots
     const parsedContent = parseMarkdown(content);
-    messageElement.innerHTML = parsedContent + '<span class="streaming-cursor">▋</span>';
+    messageElement.innerHTML = parsedContent + `
+      <div style="display: flex; align-items: center; gap: 4px;">
+        <div class="chatbot-widget-typing-dot"></div>
+        <div class="chatbot-widget-typing-dot"></div>
+        <div class="chatbot-widget-typing-dot"></div>
+      </div>
+    `;
     
     scrollToBottom();
   }
