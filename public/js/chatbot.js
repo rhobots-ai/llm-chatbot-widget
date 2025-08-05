@@ -20,6 +20,11 @@
     zIndex: 10000,
     view: 'sidesheet', // 'bubble' or 'sidesheet'
     enableStreaming: true, // Enable/disable streaming responses
+    // SQL Auto-execution Configuration
+    enableAutoSQLExecution: true, // Enable/disable automatic SQL execution
+    maxSqlRetries: 3, // Maximum retry attempts for failed SQL queries
+    sqlRetryDelay: 2000, // Delay between retries in milliseconds
+    showRetryProgress: true, // Show retry progress to user
     // CSP Configuration
     nonce: null, // CSP nonce for scripts and styles (e.g., 'abc123')
     disableExternalCSS: false, // Force inline styles for strict CSP
@@ -48,6 +53,10 @@
   let currentThreadId = null; // Track current thread ID
   let isTyping = false;
   let showingHistory = false;
+
+  // SQL Auto-execution state
+  let sqlRetryState = new Map(); // Track retry attempts per query
+  let isProcessingSQLQueries = false; // Prevent concurrent SQL processing
 
   // Metabase integration state
   let metabaseQuestionId = null;
@@ -1854,6 +1863,11 @@
 
       // Update share button visibility
       updateShareButtonVisibility();
+
+      // Trigger automatic SQL execution for streaming bot messages
+      if (config.enableAutoSQLExecution) {
+        handleBotResponseWithSQL(messageElement, content);
+      }
     }, 0);
     
     scrollToBottom();
@@ -2462,6 +2476,305 @@ Please help me fix it.`;
     }, 100);
   }
 
+  // ===== SQL AUTO-EXECUTION FUNCTIONS =====
+
+  // Detect SQL queries in bot message text
+  function detectSQLQueries(messageText) {
+    if (!config.enableAutoSQLExecution) {
+      return [];
+    }
+
+    const sqlQueries = [];
+    const sqlBlockRegex = /```(?:sql|postgres|postgresql|mysql|sqlite)\s*\n([\s\S]*?)```/gi;
+    let match;
+
+    while ((match = sqlBlockRegex.exec(messageText)) !== null) {
+      const sqlQuery = match[1].trim();
+      if (sqlQuery) {
+        sqlQueries.push({
+          query: sqlQuery,
+          fullMatch: match[0],
+          language: match[0].match(/```(\w+)/)[1].toLowerCase()
+        });
+      }
+    }
+
+    return sqlQueries;
+  }
+
+  // Handle bot response with automatic SQL execution
+  async function handleBotResponseWithSQL(messageElement, botMessage) {
+    if (!config.enableAutoSQLExecution || isProcessingSQLQueries) {
+      console.log(`here ${config.enableAutoSQLExecution},  ${isProcessingSQLQueries}`)
+      return;
+    }
+
+    const sqlQueries = detectSQLQueries(botMessage);
+    if (sqlQueries.length === 0) {
+      return;
+    }
+
+    console.log(`🔍 Detected ${sqlQueries.length} SQL quer${sqlQueries.length === 1 ? 'y' : 'ies'} in bot response`);
+    
+    // Set processing flag to prevent concurrent execution
+    isProcessingSQLQueries = true;
+
+    try {
+      // Process each SQL query
+      for (let i = 0; i < sqlQueries.length; i++) {
+        const sqlQuery = sqlQueries[i];
+        const queryId = `auto-sql-${Date.now()}-${i}`;
+        
+        // Initialize retry state for this query
+        sqlRetryState.set(queryId, {
+          query: sqlQuery.query,
+          attempt: 0,
+          maxRetries: config.maxSqlRetries,
+          originalError: null
+        });
+
+        // Show checking indicator
+        if (config.showRetryProgress) {
+          showQueryCheckingIndicator(messageElement, queryId);
+        }
+
+        // Execute query with retry logic
+        await executeQueryWithRetry(queryId, messageElement);
+      }
+    } finally {
+      // Clear processing flag
+      isProcessingSQLQueries = false;
+    }
+  }
+
+  // Execute SQL query with retry logic
+  async function executeQueryWithRetry(queryId, messageElement) {
+    const retryInfo = sqlRetryState.get(queryId);
+    if (!retryInfo) {
+      console.error('No retry info found for query:', queryId);
+      return;
+    }
+
+    const { query, attempt, maxRetries } = retryInfo;
+    
+    try {
+      console.log(`🔄 Executing SQL query (attempt ${attempt + 1}/${maxRetries + 1}): ${query.substring(0, 50)}...`);
+      
+      // Update retry status
+      if (config.showRetryProgress && attempt > 0) {
+        updateRetryStatus(messageElement, queryId, attempt + 1, maxRetries + 1);
+      }
+
+      // Execute the SQL query
+      const result = await executeSQLQueryAuto(query);
+      
+      // Query succeeded
+      console.log('✅ SQL query executed successfully');
+      hideQueryCheckingIndicator(messageElement, queryId);
+      
+      // Clean up retry state
+      sqlRetryState.delete(queryId);
+      
+      return result;
+
+    } catch (error) {
+      console.error(`❌ SQL query failed (attempt ${attempt + 1}):`, error.message);
+      isProcessingSQLQueries = false;
+
+      hideQueryCheckingIndicator(messageElement, queryId);
+      
+      // Update retry info
+      retryInfo.attempt = attempt + 1;
+      retryInfo.originalError = error.message;
+      sqlRetryState.set(queryId, retryInfo);
+
+      // Check if we should retry
+      if (attempt < maxRetries) {
+        console.log(`🔄 Retrying SQL query (${attempt + 1}/${maxRetries} attempts used)`);
+        
+        // Wait before retry
+        if (config.sqlRetryDelay > 0) {
+          await new Promise(resolve => setTimeout(resolve, config.sqlRetryDelay));
+        }
+
+        // Send fix request to bot
+        await requestQueryFix(error.message, query, attempt + 1);
+        
+        // The retry will happen when the bot responds with a fixed query
+        return;
+      } else {
+        // Max retries reached
+        console.log(`🚫 Max retries reached for SQL query (${maxRetries + 1} attempts)`);
+        hideQueryCheckingIndicator(messageElement, queryId);
+        
+        // Show final error message
+        if (config.showRetryProgress) {
+          showMaxRetriesReached(messageElement, queryId, error.message);
+        }
+        
+        // Clean up retry state
+        sqlRetryState.delete(queryId);
+        
+        throw error;
+      }
+    }
+  }
+
+  // Execute SQL query automatically (without UI buttons)
+  async function executeSQLQueryAuto(sqlQuery) {
+    const apiBaseUrl = config.apiUrl.replace('/chat', '');
+    const sqlApiUrl = `${apiBaseUrl}/sql/execute`;
+    
+    const response = await fetch(sqlApiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: sqlQuery,
+        timeout: 30000,
+        limit: 100
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok || !result.success) {
+      const errorMessage = result.message + ': ' + (result.details?.[0] || 'Unknown SQL error');
+      throw new Error(errorMessage);
+    }
+    
+    return result;
+  }
+
+  // Send automated fix request to bot
+  async function requestQueryFix(errorMessage, originalQuery, attempt) {
+    const fixMessage = `The SQL query failed with error: "${errorMessage}"
+
+Original query:
+\`\`\`sql
+${originalQuery}
+\`\`\`
+
+Please provide a corrected version of this query. This is attempt ${attempt} of ${config.maxSqlRetries}.`;
+    
+    // Add the fix request to message history
+    messageHistory.push({ 
+      text: fixMessage, 
+      sender: 'user', 
+      timestamp: Date.now() 
+    });
+
+    addMessage(fixMessage, 'user')
+
+    // Show "fixing query" indicator in chat
+    showFixingQueryIndicator();
+
+    // Send the fix request (without showing it in UI)
+    try {
+      const streamingSupported = typeof ReadableStream !== 'undefined' && 
+                                typeof TextDecoder !== 'undefined' && 
+                                config.enableStreaming !== false;
+      
+      if (streamingSupported) {
+        await sendMessageStreaming(fixMessage);
+      } else {
+        await sendMessageRegular(fixMessage);
+      }
+    } catch (error) {
+      console.error('Failed to send fix request:', error);
+      throw error;
+    } finally {
+      // Hide the fixing query indicator
+      hideFixingQueryIndicator();
+    }
+  }
+
+  // Show "fixing query" indicator
+  function showFixingQueryIndicator() {
+    // Remove any existing indicator first
+    hideFixingQueryIndicator();
+    
+    const indicator = document.createElement('div');
+    indicator.className = 'chatbot-widget-message bot';
+    indicator.id = 'fixing-query-indicator';
+    indicator.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fef3c7; border: 1px solid #fde68a; border-radius: 18px; font-size: 12px; color: #92400e;">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
+          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
+          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
+        </div>
+        <span>🔧 Fixing query...</span>
+      </div>
+    `;
+    
+    messagesContainer.appendChild(indicator);
+    scrollToBottom();
+  }
+
+  // Hide "fixing query" indicator
+  function hideFixingQueryIndicator() {
+    const indicator = document.getElementById('fixing-query-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+
+  // Show "checking query" indicator
+  function showQueryCheckingIndicator(messageElement, queryId) {
+    if (!messageElement) return;
+
+    const indicator = document.createElement('div');
+    indicator.className = 'chatbot-sql-checking-indicator';
+    indicator.id = `checking-${queryId}`;
+    indicator.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f0f9ff; border: 1px solid #e0f2fe; border-radius: 6px; margin: 8px 0; font-size: 12px; color: #0369a1;">
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <div class="chatbot-widget-typing-dot" style="background: #0369a1;"></div>
+          <div class="chatbot-widget-typing-dot" style="background: #0369a1;"></div>
+          <div class="chatbot-widget-typing-dot" style="background: #0369a1;"></div>
+        </div>
+        <span>Checking query...</span>
+      </div>
+    `;
+    
+    messageElement.appendChild(indicator);
+    scrollToBottom();
+  }
+
+  // Update retry status indicator
+  function updateRetryStatus(messageElement, queryId, attempt, maxAttempts) {
+    const indicator = document.getElementById(`checking-${queryId}`);
+    if (!indicator) return;
+
+    const statusText = indicator.querySelector('span');
+    if (statusText) {
+      statusText.textContent = `Checking query... (Attempt ${attempt} of ${maxAttempts})`;
+    }
+  }
+
+  // Hide "checking query" indicator
+  function hideQueryCheckingIndicator(messageElement, queryId) {
+    const indicator = document.getElementById(`checking-${queryId}`);
+    if (indicator) {
+      indicator.remove();
+    }
+  }
+
+  // Show max retries reached message
+  function showMaxRetriesReached(messageElement, queryId, finalError) {
+    const indicator = document.getElementById(`checking-${queryId}`);
+    if (!indicator) return;
+
+    indicator.innerHTML = `
+      <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; margin: 8px 0; font-size: 12px; color: #991b1b;">
+        <span style="color: #dc2626; font-weight: bold;">✗</span>
+        <span>Max retries reached. Query could not be fixed automatically.</span>
+      </div>
+    `;
+  }
+
   // Add message to chat
   function addMessage(text, sender) {
     const messageElement = document.createElement('div');
@@ -2508,6 +2821,11 @@ Please help me fix it.`;
         
         // Update paste button visibility
         updatePasteButtonVisibility();
+
+        // Trigger automatic SQL execution for bot messages
+        if (config.enableAutoSQLExecution) {
+          handleBotResponseWithSQL(messageElement, text);
+        }
       }, 0);
     } else {
       messageElement.textContent = text;
