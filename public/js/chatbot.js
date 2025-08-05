@@ -2566,7 +2566,7 @@ Please help me fix it.`;
       }
 
       // Execute the SQL query
-      const result = await executeSQLQueryAuto(query);
+      const result = await executeSQLQueryAuto(query, messageElement);
       
       // Query succeeded
       console.log('✅ SQL query executed successfully');
@@ -2621,7 +2621,7 @@ Please help me fix it.`;
   }
 
   // Execute SQL query automatically (without UI buttons)
-  async function executeSQLQueryAuto(sqlQuery) {
+  async function executeSQLQueryAuto(sqlQuery, messageElement = null) {
     const apiBaseUrl = config.apiUrl.replace('/chat', '');
     const sqlApiUrl = `${apiBaseUrl}/sql/execute`;
     
@@ -2642,6 +2642,22 @@ Please help me fix it.`;
     if (!response.ok || !result.success) {
       const errorMessage = result.message + ': ' + (result.details?.[0] || 'Unknown SQL error');
       throw new Error(errorMessage);
+    }
+    
+    // Show results in chat UI if messageElement is provided and result is successful
+    if (messageElement && result.success) {
+      // Generate a unique code ID for this auto-executed query
+      const autoCodeId = `auto-sql-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create a results container and append it to the message element
+      const resultsContainer = document.createElement('div');
+      resultsContainer.className = 'chatbot-sql-results';
+      resultsContainer.id = `${autoCodeId}-results`;
+      resultsContainer.style.display = 'none';
+      messageElement.appendChild(resultsContainer);
+      
+      // Show the results using the existing UI component
+      showSQLResults(result, autoCodeId);
     }
     
     return result;
