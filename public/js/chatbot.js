@@ -2176,6 +2176,9 @@
     return temp.innerHTML;
   }
 
+  // Counter for generating unique IDs for code blocks
+  let codeBlockCounter = 0;
+
   // Markdown parser using marked library with fallback
   function parseMarkdown(text) {
     try {
@@ -2221,7 +2224,7 @@
       const isSQLBlock = ['sql', 'postgres', 'postgresql', 'mysql', 'sqlite'].includes(language.toLowerCase());
       
       // Create enhanced code block structure
-      const codeBlockId = `chatbot-code-${Date.now()}-${index}`;
+      const codeBlockId = `chatbot-code-${codeBlockCounter++}`;
       const enhancedCodeBlock = document.createElement('div');
       enhancedCodeBlock.className = 'chatbot-code-block';
       
