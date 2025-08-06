@@ -10,7 +10,7 @@
   const defaultConfig = {
     apiUrl: 'https://yourdomain.com/api/chat',
     primaryColor: '#4F46E5',
-    position: 'bottom-right',
+    position: 'top-right',
     welcomeMessage: 'Hello! How can I help you today?',
     placeholder: 'Type your message...',
     title: 'Chat Support',
