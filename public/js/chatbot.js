@@ -245,6 +245,18 @@
         left: 20px;
       }
 
+      .chatbot-widget-bubble.view-sidesheet.position-top {
+        left: 50%;
+        top: 40px;
+        transform: translateX(-50%);
+      }
+
+      .chatbot-widget-bubble.view-sidesheet.position-bottom {
+        left: 50%;
+        bottom: 40px;
+        transform: translateX(-50%);
+      }
+
       .chatbot-widget-bubble:hover {
         transform: scale(1.1);
         box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
@@ -252,6 +264,14 @@
 
       .chatbot-widget-bubble.view-sidesheet:hover {
         transform: translateY(-50%) scale(1.1);
+      }
+
+      .chatbot-widget-bubble.view-sidesheet.position-top:hover {
+        transform: translateX(-50%) scale(1.1);
+      }
+
+      .chatbot-widget-bubble.view-sidesheet.position-bottom:hover {
+        transform: translateX(-50%) scale(1.1);
       }
 
       .chatbot-widget-bubble-icon {
@@ -314,6 +334,14 @@
 
       .chatbot-widget-window.view-sidesheet.position-left {
         left: 0;
+      }
+
+      .chatbot-widget-window.view-sidesheet.position-top {
+        right: 0;
+      }
+
+      .chatbot-widget-window.view-sidesheet.position-bottom {
+        right: 0;
       }
 
       @keyframes chatbot-widget-slideIn {
@@ -1631,7 +1659,13 @@
     bubbleClasses.push(`view-${config.view}`);
     
     if (config.view === 'sidesheet') {
-      bubbleClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+      if (config.position.includes('top')) {
+        bubbleClasses.push('position-top');
+      } else if (config.position.includes('bottom')) {
+        bubbleClasses.push('position-bottom');
+      } else {
+        bubbleClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+      }
     } else {
       bubbleClasses.push(`position-${config.position}`);
     }
@@ -1656,7 +1690,13 @@
     windowClasses.push(`view-${config.view}`);
     
     if (config.view === 'sidesheet') {
-      windowClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+      if (config.position.includes('top')) {
+        windowClasses.push('position-top');
+      } else if (config.position.includes('bottom')) {
+        windowClasses.push('position-bottom');
+      } else {
+        windowClasses.push(config.position.includes('right') ? 'position-right' : 'position-left');
+      }
     } else {
       windowClasses.push(`position-${config.position}`);
     }
@@ -3605,14 +3645,20 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
     // Remove old view classes
     element.classList.remove('view-bubble', 'view-sidesheet');
     element.classList.remove('position-bottom-right', 'position-bottom-left', 'position-top-right', 'position-top-left');
-    element.classList.remove('position-right', 'position-left');
+    element.classList.remove('position-right', 'position-left', 'position-top', 'position-bottom');
     
     // Add new view class
     element.classList.add(`view-${config.view}`);
     
     // Add appropriate position classes
     if (config.view === 'sidesheet') {
-      element.classList.add(config.position.includes('right') ? 'position-right' : 'position-left');
+      if (config.position.includes('top')) {
+        element.classList.add('position-top');
+      } else if (config.position.includes('bottom')) {
+        element.classList.add('position-bottom');
+      } else {
+        element.classList.add(config.position.includes('right') ? 'position-right' : 'position-left');
+      }
     } else {
       element.classList.add(`position-${config.position}`);
     }
