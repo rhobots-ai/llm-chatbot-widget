@@ -55,6 +55,8 @@
   let showingHistory = false;
   let conversationUsage = {
     totalTokens: 0,
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
     totalCost: 0,
     modelName: null
   };
@@ -3813,21 +3815,25 @@ ${metabaseQuestionData.query}
     if (usage && (usage.totalTokens > 0 || usage.totalCost > 0)) {
       // Update conversation usage state
       conversationUsage.totalTokens = usage.totalTokens || 0;
+      conversationUsage.totalInputTokens = usage.totalInputTokens || 0;
+      conversationUsage.totalOutputTokens = usage.totalOutputTokens || 0;
       conversationUsage.totalCost = usage.totalCost || 0;
       conversationUsage.modelName = usage.modelName || null;
 
       // Format token count and cost
       const formattedTokens = formatTokenCount(conversationUsage.totalTokens);
+      const formattedInputTokens = formatTokenCount(conversationUsage.totalInputTokens);
+      const formattedOutputTokens = formatTokenCount(conversationUsage.totalOutputTokens);
       const formattedCost = formatCost(conversationUsage.totalCost);
       const modelDisplay = getModelDisplayName(conversationUsage.modelName);
 
       // Create a small token usage status message
-      showTokenUsageStatus(formattedTokens, formattedCost, modelDisplay);
+      showTokenUsageStatus(formattedTokens, formattedInputTokens, formattedOutputTokens, formattedCost, modelDisplay);
     }
   }
 
   // Show token usage as a small status message
-  function showTokenUsageStatus(tokens, cost, model) {    
+  function showTokenUsageStatus(tokens, inputTokens, outputTokens, cost, model) {    
     // Remove any existing token status
     const existingStatus = messagesContainer.querySelector('.chatbot-token-status');
     if (existingStatus) {
@@ -3840,7 +3846,7 @@ ${metabaseQuestionData.query}
     statusElement.className = 'chatbot-token-status';
     statusElement.innerHTML = `
       <div class="chatbot-token-status-content">
-        <span class="chatbot-token-info">💬 Usage: ${tokens} tokens • ${cost}</span>
+        <span class="chatbot-token-info">💬 Tokens: ${tokens}T • ${inputTokens}I • ${outputTokens}O • ${cost}</span>
         ${model ? `<span class="chatbot-model-info">🤖 ${model}</span>` : ''}
       </div>
     `;
