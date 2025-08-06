@@ -1282,6 +1282,185 @@
         box-sizing: border-box;
       }
 
+      /* Rating functionality styles */
+      .chatbot-message-actions {
+        margin-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .chatbot-rating-buttons {
+        display: flex;
+        gap: 8px;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+      }
+
+      .chatbot-widget-message.bot:hover .chatbot-rating-buttons {
+        opacity: 1;
+      }
+
+      .chatbot-rating-btn {
+        background: none;
+        border: 1px solid #e2e8f0;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 16px;
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+
+      .chatbot-rating-btn:hover {
+        background: #f8fafc;
+        transform: scale(1.1);
+      }
+
+      .chatbot-rating-btn.thumbs-up.active {
+        background: #dcfce7;
+        border-color: #16a34a;
+        color: #16a34a;
+      }
+
+      .chatbot-rating-btn.thumbs-down.active {
+        background: #fee2e2;
+        border-color: #dc2626;
+        color: #dc2626;
+      }
+
+      .chatbot-rating-status {
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        margin-top: 4px;
+      }
+
+      .chatbot-rating-status.positive {
+        background: #dcfce7;
+        color: #16a34a;
+        border: 1px solid #bbf7d0;
+      }
+
+      .chatbot-rating-status.negative {
+        background: #fee2e2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+      }
+
+      .chatbot-comment-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: calc(var(--chatbot-z-index, 10000) + 10);
+        animation: chatbot-modal-fadeIn 0.2s ease-out;
+      }
+
+      @keyframes chatbot-modal-fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .chatbot-comment-content {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        animation: chatbot-modal-slideIn 0.3s ease-out;
+      }
+
+      @keyframes chatbot-modal-slideIn {
+        from {
+          opacity: 0;
+          transform: translateY(-20px) scale(0.95);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      .chatbot-comment-content h4 {
+        margin: 0 0 16px 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .chatbot-comment-textarea {
+        width: 100%;
+        min-height: 80px;
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        outline: none;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+      }
+
+      .chatbot-comment-textarea:focus {
+        border-color: var(--chatbot-primary-color, #4F46E5);
+      }
+
+      .chatbot-comment-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 16px;
+      }
+
+      .chatbot-comment-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+      }
+
+      .chatbot-comment-save {
+        background: var(--chatbot-primary-color, #4F46E5);
+        color: white;
+      }
+
+      .chatbot-comment-save:hover {
+        background: #4338ca;
+        transform: translateY(-1px);
+      }
+
+      .chatbot-comment-skip {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
+      .chatbot-comment-skip:hover {
+        background: #e5e7eb;
+        color: #374151;
+      }
+
       /* Mobile responsiveness */
       @media (max-width: 480px) {
         .chatbot-widget-window.view-bubble {
@@ -1683,7 +1862,7 @@
                       // Add rating buttons to streaming message if we have messageId
                       if (streamingMessageElement && data.messageId) {
                         streamingMessageElement.setAttribute('data-message-id', data.messageId);
-                        addRatingButtons(streamingMessageElement, data.messageId);
+                        addRatingButtons(streamingMessageElement, { id: data.messageId });
                       }
                       
                       // Update share button visibility
@@ -2814,7 +2993,7 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
       
       // Add rating buttons for bot messages
       if (messageId) {
-        addRatingButtons(messageElement, messageId);
+        addRatingButtons(messageElement, { id: messageId });
       }
       
       // Add event listeners for copy and run buttons after adding the message
@@ -3164,7 +3343,7 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
             // Update share button visibility
             updateShareButtonVisibility();
 
-            addRatingButtons(messageElement, msg.id)
+            addRatingButtons(messageElement, msg)
           }, 0);
         } else {
           messageElement.textContent = msg.text;
@@ -3257,7 +3436,7 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
             // Update share button visibility
             updateShareButtonVisibility();
 
-            addRatingButtons(messageElement, msg.id)
+            addRatingButtons(messageElement, msg)
           }, 0);
         } else {
           messageElement.textContent = msg.text;
@@ -3565,7 +3744,8 @@ ${metabaseQuestionData.query}
   // ===== MESSAGE RATING FUNCTIONS =====
 
   // Add rating buttons to bot messages
-  function addRatingButtons(messageElement, messageId) {
+  function addRatingButtons(messageElement, messageObj) {
+    const messageId = messageObj.id;
     const actionsDiv = document.createElement('div');
     actionsDiv.className = 'chatbot-message-actions';
     actionsDiv.innerHTML = `
@@ -3592,8 +3772,10 @@ ${metabaseQuestionData.query}
       });
     });
     
-    // Load existing rating if any
-    loadExistingRating(messageId, messageElement);
+    // Use existing rating data from message object if available
+    if (messageObj.rating) {
+      updateRatingUI(messageElement, messageObj.rating, messageObj.rating_comment);
+    }
   }
 
   // Handle rating button clicks
@@ -3705,22 +3887,6 @@ ${metabaseQuestionData.query}
     }
   }
 
-  // Load existing rating from backend
-  async function loadExistingRating(messageId, messageElement) {
-    try {
-      const apiBaseUrl = config.apiUrl.replace('/chat', '');
-      const response = await fetch(`${apiBaseUrl}/messages/${messageId}/rating`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        if (data.rating) {
-          updateRatingUI(messageElement, data.rating, data.comment);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load existing rating:', error);
-    }
-  }
 
   // Update rating UI
   function updateRatingUI(messageElement, rating, comment) {
