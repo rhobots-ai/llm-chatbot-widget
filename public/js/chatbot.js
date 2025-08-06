@@ -2976,11 +2976,6 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
     indicator.id = 'fixing-query-indicator';
     indicator.innerHTML = `
       <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fef3c7; border: 1px solid #fde68a; border-radius: 18px; font-size: 12px; color: #92400e;">
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
-          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
-          <div class="chatbot-widget-typing-dot" style="background: #f59e0b;"></div>
-        </div>
         <span>🔧 Fixing query...</span>
       </div>
     `;
