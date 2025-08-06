@@ -50,13 +50,13 @@
 
 .chatbot-widget-bubble.view-sidesheet.position-top {
   left: 50%;
-  top: 40px;
+  top: 20px;
   transform: translateX(-50%);
 }
 
 .chatbot-widget-bubble.view-sidesheet.position-bottom {
   left: 50%;
-  bottom: 40px;
+  bottom: 20px;
   transform: translateX(-50%);
 }
 
