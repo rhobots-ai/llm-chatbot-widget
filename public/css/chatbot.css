@@ -47,6 +47,18 @@
   left: 20px;
 }
 
+.chatbot-widget-bubble.view-sidesheet.position-top {
+  left: 50%;
+  top: 40px;
+  transform: translateX(-50%);
+}
+
+.chatbot-widget-bubble.view-sidesheet.position-bottom {
+  left: 50%;
+  bottom: 40px;
+  transform: translateX(-50%);
+}
+
 .chatbot-widget-bubble:hover {
   transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
@@ -116,6 +128,14 @@
 
 .chatbot-widget-window.view-sidesheet.position-left {
   left: 0;
+}
+
+.chatbot-widget-window.view-sidesheet.position-top {
+  right: 0;
+}
+
+.chatbot-widget-window.view-sidesheet.position-bottom {
+  right: 0;
 }
 
 @keyframes chatbot-widget-slideIn {
