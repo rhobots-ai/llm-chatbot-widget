@@ -35,15 +35,16 @@
 }
 
 .chatbot-widget-bubble.view-sidesheet {
-  top: 50%;
   transform: translateY(-50%);
 }
 
 .chatbot-widget-bubble.view-sidesheet.position-right {
+  top: 50%;
   right: 20px;
 }
 
 .chatbot-widget-bubble.view-sidesheet.position-left {
+  top: 50%;
   left: 20px;
 }
 
@@ -60,12 +61,7 @@
 }
 
 .chatbot-widget-bubble:hover {
-  transform: scale(1.1);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-}
-
-.chatbot-widget-bubble.view-sidesheet:hover {
-  transform: translateY(-50%) scale(1.1);
 }
 
 .chatbot-widget-bubble-icon {
