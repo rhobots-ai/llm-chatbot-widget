@@ -3846,8 +3846,38 @@ ${metabaseQuestionData.query}
     statusElement.className = 'chatbot-token-status';
     statusElement.innerHTML = `
       <div class="chatbot-token-status-content">
-        <span class="chatbot-token-info">💬 Tokens: ${tokens}T • ${inputTokens}I • ${outputTokens}O • ${cost}</span>
-        ${model ? `<span class="chatbot-model-info">🤖 ${model}</span>` : ''}
+        <div class="chatbot-token-main">
+          <div class="chatbot-token-header">
+            <span class="chatbot-token-icon">📊</span>
+            <span class="chatbot-token-title">Usage Stats</span>
+          </div>
+          <div class="chatbot-token-metrics">
+            <div class="chatbot-token-metric">
+              <span class="chatbot-token-value">${tokens}</span>
+              <span class="chatbot-token-label">Total</span>
+            </div>
+            <div class="chatbot-token-separator">•</div>
+            <div class="chatbot-token-metric">
+              <span class="chatbot-token-value">${inputTokens}</span>
+              <span class="chatbot-token-label">Input</span>
+            </div>
+            <div class="chatbot-token-separator">•</div>
+            <div class="chatbot-token-metric">
+              <span class="chatbot-token-value">${outputTokens}</span>
+              <span class="chatbot-token-label">Output</span>
+            </div>
+            <div class="chatbot-token-separator">•</div>
+            <div class="chatbot-token-cost">
+              <span class="chatbot-cost-value">${cost}</span>
+            </div>
+          </div>
+        </div>
+        ${model ? `
+          <div class="chatbot-model-section">
+            <span class="chatbot-model-icon">🤖</span>
+            <span class="chatbot-model-name">${model}</span>
+          </div>
+        ` : ''}
       </div>
     `;
     

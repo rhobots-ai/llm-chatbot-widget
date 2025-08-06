@@ -1278,66 +1278,177 @@
   border-color: #cbd5e1;
 }
 
-/* Token usage status styles - Sticky note appearance */
+/* Token usage status styles - Modern card design */
 .chatbot-token-status {
-  margin: 8px 0;
+  margin: 12px 0;
   display: flex;
   justify-content: center;
   position: relative;
 }
 
 .chatbot-token-status-content {
-  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  border: 1px solid #f59e0b;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 11px;
-  color: #92400e;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 12px;
+  color: #475569;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 10px;
   position: relative;
   box-shadow: 
-    0 2px 4px rgba(245, 158, 11, 0.1),
-    0 1px 2px rgba(245, 158, 11, 0.2);
-  transform: rotate(-1deg);
+    0 4px 6px -1px rgba(0, 0, 0, 0.1),
+    0 2px 4px -1px rgba(0, 0, 0, 0.06);
   transition: all 0.3s ease;
-  font-family: 'Comic Sans MS', cursive, sans-serif;
-  border-left: 3px solid #f59e0b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  border-left: 4px solid #3b82f6;
+  min-width: 280px;
+  backdrop-filter: blur(10px);
 }
 
 .chatbot-token-status-content:hover {
-  transform: rotate(0deg) scale(1.02);
+  transform: translateY(-2px);
   box-shadow: 
-    0 4px 8px rgba(245, 158, 11, 0.15),
-    0 2px 4px rgba(245, 158, 11, 0.25);
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border-left-color: #2563eb;
 }
 
-.chatbot-token-status-content::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 20px;
-  height: 8px;
-  background: linear-gradient(135deg, #fbbf24, #f59e0b);
-  border-radius: 0 0 4px 4px;
-  box-shadow: 0 1px 2px rgba(245, 158, 11, 0.3);
+.chatbot-token-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.chatbot-token-info {
+.chatbot-token-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.chatbot-token-icon {
+  font-size: 14px;
+}
+
+.chatbot-token-title {
   font-weight: 600;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+  color: #334155;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.chatbot-model-info {
-  color: #a16207;
+.chatbot-token-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chatbot-token-metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 40px;
+}
+
+.chatbot-token-value {
+  font-weight: 700;
+  color: #1e293b;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.chatbot-token-label {
+  font-size: 9px;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
   font-weight: 500;
-  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
 }
 
-/* Mobile responsiveness */
+.chatbot-token-separator {
+  color: #cbd5e1;
+  font-weight: 300;
+  margin: 0 2px;
+}
+
+.chatbot-token-cost {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-left: auto;
+}
+
+.chatbot-cost-value {
+  font-weight: 600;
+  color: #065f46;
+  font-size: 11px;
+}
+
+.chatbot-model-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 2px;
+}
+
+.chatbot-model-icon {
+  font-size: 12px;
+}
+
+.chatbot-model-name {
+  color: #6366f1;
+  font-weight: 600;
+  font-size: 11px;
+  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+  border: 1px solid #c7d2fe;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+/* Mobile responsiveness for token widget */
+@media (max-width: 480px) {
+  .chatbot-token-status-content {
+    min-width: unset;
+    width: calc(100% - 32px);
+    max-width: 320px;
+    padding: 12px 14px;
+    font-size: 11px;
+  }
+  
+  .chatbot-token-metrics {
+    gap: 6px;
+    justify-content: center;
+  }
+  
+  .chatbot-token-metric {
+    min-width: 35px;
+  }
+  
+  .chatbot-token-value {
+    font-size: 12px;
+  }
+  
+  .chatbot-token-label {
+    font-size: 8px;
+  }
+  
+  .chatbot-token-cost {
+    margin-left: 0;
+    margin-top: 4px;
+    align-self: center;
+  }
+}
+
 @media (max-width: 480px) {
   .chatbot-widget-window.view-bubble {
     width: 100vw !important;
