@@ -3163,6 +3163,8 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
 
             // Update share button visibility
             updateShareButtonVisibility();
+
+            addRatingButtons(messageElement, msg.id)
           }, 0);
         } else {
           messageElement.textContent = msg.text;
@@ -3254,6 +3256,8 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
 
             // Update share button visibility
             updateShareButtonVisibility();
+
+            addRatingButtons(messageElement, msg.id)
           }, 0);
         } else {
           messageElement.textContent = msg.text;
