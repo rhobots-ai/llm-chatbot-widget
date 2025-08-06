@@ -253,9 +253,13 @@ class ConversationManager {
     }
 
     return internalHistory.map(msg => ({
+      id: msg.id,
       text: msg.text,
       sender: msg.sender,
-      timestamp: msg.timestamp
+      timestamp: msg.timestamp,
+      rating: msg.rating,
+      rating_comment: msg.rating_comment,
+      rating_timestamp: msg.rating_timestamp
     }));
   }
 
