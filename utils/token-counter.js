@@ -145,8 +145,8 @@ class TokenCounter {
   calculateCost(inputTokens, outputTokens, modelName) {
     const pricing = this.getModelPricing(modelName);
     
-    const inputCost = (inputTokens / 1000) * pricing.input;
-    const outputCost = (outputTokens / 1000) * pricing.output;
+    const inputCost = (inputTokens / 1000000) * pricing.input;
+    const outputCost = (outputTokens / 1000000) * pricing.output;
     
     return inputCost + outputCost;
   }
@@ -157,8 +157,20 @@ class TokenCounter {
    * @returns {Object} - Pricing object with input and output rates per 1K tokens
    */
   getModelPricing(modelName) {
-    // OpenAI pricing as of 2024 (USD per 1K tokens)
+    // OpenAI pricing as of 2024 (USD per 1M tokens)
     const pricing = {
+      'gpt-4.1': {
+        input: 2,
+        output: 8
+      },
+      'gpt-4.1-mini': {
+        input: 0.4,
+        output: 1.6
+      },
+      'gpt-4.1-nano': {
+        input: 0.1,
+        output: 0.4
+      },
       'gpt-4': {
         input: 0.03,
         output: 0.06
