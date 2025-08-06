@@ -851,12 +851,13 @@ app.post('/api/chat', async (req, res) => {
       await conversationManager.mapToThread(currentConversationId, responseThreadId);
     }
 
-    // Add bot response to conversation
-    await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
+    // Add bot response to conversation and get message ID
+    const messageId = await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
 
     // Send response in the format expected by the widget
     res.json({
       message: responseMessage,
+      messageId: messageId,
       conversationId: currentConversationId,
       threadId: responseThreadId || existingThreadId,
       provider: finalProvider,
@@ -1019,14 +1020,15 @@ async function handleStreamingChat(req, res) {
       await conversationManager.mapToThread(currentConversationId, responseThreadId);
     }
 
-    // Add bot response to conversation
-    await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
+    // Add bot response to conversation and get message ID
+    const messageId = await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
 
     // Send final completion event
     if (!res.destroyed) {
       res.write('data: ' + JSON.stringify({
         type: 'done',
         conversationId: currentConversationId,
+        messageId: messageId,
         threadId: responseThreadId || existingThreadId,
         provider: finalProvider,
         assistantId: finalAssistantId
@@ -1216,6 +1218,109 @@ app.get('/api/threads/:threadId/conversation', async (req, res) => {
   } catch (error) {
     console.error('Get Conversation by Thread Error:', error);
     res.status(500).json(createErrorResponse('Failed to get conversation by thread'));
+  }
+});
+
+// Message rating endpoints
+
+// Submit or update message rating
+app.post('/api/messages/:messageId/rating', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { rating, comment } = req.body;
+
+    // Validate rating
+    if (!rating || !['thumbs_up', 'thumbs_down'].includes(rating)) {
+      return res.status(400).json(createErrorResponse(
+        'Invalid rating',
+        ['Rating must be either "thumbs_up" or "thumbs_down"'],
+        400
+      ));
+    }
+
+    // Check if message exists
+    const database = require('./utils/database');
+    const message = await database.getMessageById(messageId);
+    if (!message) {
+      return res.status(404).json(createErrorResponse('Message not found'));
+    }
+
+    // Update the rating
+    const success = await database.updateMessageRating(messageId, rating, comment || null);
+    
+    if (success) {
+      res.json({
+        success: true,
+        messageId: parseInt(messageId),
+        rating: rating,
+        comment: comment || null,
+        timestamp: Date.now()
+      });
+    } else {
+      res.status(500).json(createErrorResponse('Failed to update rating'));
+    }
+
+  } catch (error) {
+    console.error('Update Message Rating Error:', error);
+    res.status(500).json(createErrorResponse('Failed to update message rating'));
+  }
+});
+
+// Get message rating
+app.get('/api/messages/:messageId/rating', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    // Check if message exists
+    const database = require('./utils/database');
+    const message = await database.getMessageById(messageId);
+    if (!message) {
+      return res.status(404).json(createErrorResponse('Message not found'));
+    }
+
+    // Get the rating
+    const ratingData = await database.getMessageRating(messageId);
+    
+    res.json({
+      messageId: parseInt(messageId),
+      rating: ratingData?.rating || null,
+      comment: ratingData?.rating_comment || null,
+      timestamp: ratingData?.rating_timestamp || null
+    });
+
+  } catch (error) {
+    console.error('Get Message Rating Error:', error);
+    res.status(500).json(createErrorResponse('Failed to get message rating'));
+  }
+});
+
+// Clear message rating
+app.delete('/api/messages/:messageId/rating', async (req, res) => {
+  try {
+    const { messageId } = req.params;
+
+    // Check if message exists
+    const database = require('./utils/database');
+    const message = await database.getMessageById(messageId);
+    if (!message) {
+      return res.status(404).json(createErrorResponse('Message not found'));
+    }
+
+    // Clear the rating
+    const success = await database.clearMessageRating(messageId);
+    
+    if (success) {
+      res.json({
+        success: true,
+        messageId: parseInt(messageId)
+      });
+    } else {
+      res.status(500).json(createErrorResponse('Failed to clear rating'));
+    }
+
+  } catch (error) {
+    console.error('Clear Message Rating Error:', error);
+    res.status(500).json(createErrorResponse('Failed to clear message rating'));
   }
 });
 

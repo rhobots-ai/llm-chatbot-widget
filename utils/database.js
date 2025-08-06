@@ -117,8 +117,45 @@ class DatabaseManager {
                   console.warn('Warning adding name column:', nameAlterErr.message);
                 }
                 
-                console.log('✅ Database tables created successfully');
-                resolve();
+                // Add rating columns to messages table (migration)
+                this.db.run(`
+                  ALTER TABLE messages ADD COLUMN rating TEXT CHECK (rating IN ('thumbs_up', 'thumbs_down', NULL))
+                `, (ratingErr) => {
+                  // Ignore error if column already exists
+                  if (ratingErr && !ratingErr.message.includes('duplicate column name')) {
+                    console.warn('Warning adding rating column:', ratingErr.message);
+                  }
+                  
+                  this.db.run(`
+                    ALTER TABLE messages ADD COLUMN rating_comment TEXT
+                  `, (commentErr) => {
+                    // Ignore error if column already exists
+                    if (commentErr && !commentErr.message.includes('duplicate column name')) {
+                      console.warn('Warning adding rating_comment column:', commentErr.message);
+                    }
+                    
+                    this.db.run(`
+                      ALTER TABLE messages ADD COLUMN rating_timestamp INTEGER
+                    `, (timestampErr) => {
+                      // Ignore error if column already exists
+                      if (timestampErr && !timestampErr.message.includes('duplicate column name')) {
+                        console.warn('Warning adding rating_timestamp column:', timestampErr.message);
+                      }
+                      
+                      // Create index for rating column
+                      this.db.run(`
+                        CREATE INDEX IF NOT EXISTS idx_messages_rating ON messages(rating)
+                      `, (indexErr) => {
+                        if (indexErr) {
+                          console.warn('Warning creating rating index:', indexErr.message);
+                        }
+                        
+                        console.log('✅ Database tables created successfully');
+                        resolve();
+                      });
+                    });
+                  });
+                });
               });
             });
           });
@@ -517,6 +554,96 @@ class DatabaseManager {
   }
 
   /**
+   * Update message rating
+   */
+  async updateMessageRating(messageId, rating, comment = null) {
+    return new Promise((resolve, reject) => {
+      const timestamp = Date.now();
+      this.db.run(
+        'UPDATE messages SET rating = ?, rating_comment = ?, rating_timestamp = ? WHERE id = ?',
+        [rating, comment, timestamp, messageId],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Get message rating
+   */
+  async getMessageRating(messageId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT rating, rating_comment, rating_timestamp FROM messages WHERE id = ?',
+        [messageId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(row);
+        }
+      );
+    });
+  }
+
+  /**
+   * Clear message rating
+   */
+  async clearMessageRating(messageId) {
+    return new Promise((resolve, reject) => {
+      this.db.run(
+        'UPDATE messages SET rating = NULL, rating_comment = NULL, rating_timestamp = NULL WHERE id = ?',
+        [messageId],
+        function(err) {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve(this.changes > 0);
+        }
+      );
+    });
+  }
+
+  /**
+   * Get message by ID
+   */
+  async getMessageById(messageId) {
+    return new Promise((resolve, reject) => {
+      this.db.get(
+        'SELECT * FROM messages WHERE id = ?',
+        [messageId],
+        (err, row) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          if (!row) {
+            resolve(null);
+            return;
+          }
+
+          // Parse metadata
+          try {
+            row.metadata = JSON.parse(row.metadata || '{}');
+          } catch (e) {
+            row.metadata = {};
+          }
+
+          resolve(row);
+        }
+      );
+    });
+  }
+
+  /**
    * Get database statistics
    */
   async getStats() {
@@ -524,7 +651,10 @@ class DatabaseManager {
       const queries = [
         'SELECT COUNT(*) as total_conversations FROM conversations',
         'SELECT COUNT(*) as total_messages FROM messages',
-        'SELECT COUNT(*) as active_conversations FROM conversations WHERE last_activity > ?'
+        'SELECT COUNT(*) as active_conversations FROM conversations WHERE last_activity > ?',
+        'SELECT COUNT(*) as rated_messages FROM messages WHERE rating IS NOT NULL',
+        'SELECT COUNT(*) as thumbs_up FROM messages WHERE rating = "thumbs_up"',
+        'SELECT COUNT(*) as thumbs_down FROM messages WHERE rating = "thumbs_down"'
       ];
 
       const oneHourAgo = Date.now() - (60 * 60 * 1000);
@@ -538,12 +668,24 @@ class DatabaseManager {
         }),
         new Promise((res, rej) => {
           this.db.get(queries[2], [oneHourAgo], (err, row) => err ? rej(err) : res(row.active_conversations));
+        }),
+        new Promise((res, rej) => {
+          this.db.get(queries[3], (err, row) => err ? rej(err) : res(row.rated_messages));
+        }),
+        new Promise((res, rej) => {
+          this.db.get(queries[4], (err, row) => err ? rej(err) : res(row.thumbs_up));
+        }),
+        new Promise((res, rej) => {
+          this.db.get(queries[5], (err, row) => err ? rej(err) : res(row.thumbs_down));
         })
-      ]).then(([totalConversations, totalMessages, activeConversations]) => {
+      ]).then(([totalConversations, totalMessages, activeConversations, ratedMessages, thumbsUp, thumbsDown]) => {
         resolve({
           totalConversations,
           totalMessages,
-          activeConversations
+          activeConversations,
+          ratedMessages,
+          thumbsUp,
+          thumbsDown
         });
       }).catch(reject);
     });

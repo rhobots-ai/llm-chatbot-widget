@@ -1680,6 +1680,12 @@
                         currentThreadId = data.threadId;
                       }
                       
+                      // Add rating buttons to streaming message if we have messageId
+                      if (streamingMessageElement && data.messageId) {
+                        streamingMessageElement.setAttribute('data-message-id', data.messageId);
+                        addRatingButtons(streamingMessageElement, data.messageId);
+                      }
+                      
                       // Update share button visibility
                       updateShareButtonVisibility();
                       
@@ -1772,7 +1778,8 @@
       
       // Add bot response
       const botMessage = data.message || data.response || 'Sorry, I didn\'t understand that.';
-      addMessage(botMessage, 'bot');
+      const messageId = data.messageId || null;
+      addMessage(botMessage, 'bot', messageId);
 
     } catch (error) {
       console.error('Chatbot API error:', error);
@@ -2792,13 +2799,23 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
   }
 
   // Add message to chat
-  function addMessage(text, sender) {
+  function addMessage(text, sender, messageId = null) {
     const messageElement = document.createElement('div');
     messageElement.className = `chatbot-widget-message ${sender}`;
+    
+    // Store message ID for rating functionality
+    if (sender === 'bot' && messageId) {
+      messageElement.setAttribute('data-message-id', messageId);
+    }
     
     // Parse markdown for bot messages, keep plain text for user messages
     if (sender === 'bot') {
       messageElement.innerHTML = parseMarkdown(text);
+      
+      // Add rating buttons for bot messages
+      if (messageId) {
+        addRatingButtons(messageElement, messageId);
+      }
       
       // Add event listeners for copy and run buttons after adding the message
       setTimeout(() => {
@@ -3538,6 +3555,213 @@ ${metabaseQuestionData.query}
       // Show share button only if we have a conversation with messages
       const hasConversation = currentConversationId && messageHistory.length > 1;
       shareButton.style.display = hasConversation ? 'flex' : 'none';
+    }
+  }
+
+  // ===== MESSAGE RATING FUNCTIONS =====
+
+  // Add rating buttons to bot messages
+  function addRatingButtons(messageElement, messageId) {
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'chatbot-message-actions';
+    actionsDiv.innerHTML = `
+      <div class="chatbot-rating-buttons">
+        <button class="chatbot-rating-btn thumbs-up" data-rating="thumbs_up" title="Helpful">
+          👍
+        </button>
+        <button class="chatbot-rating-btn thumbs-down" data-rating="thumbs_down" title="Not helpful">
+          👎
+        </button>
+      </div>
+      <div class="chatbot-rating-status" style="display: none;">
+        <span class="chatbot-rating-text"></span>
+      </div>
+    `;
+    
+    messageElement.appendChild(actionsDiv);
+    
+    // Add event listeners
+    const ratingButtons = actionsDiv.querySelectorAll('.chatbot-rating-btn');
+    ratingButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        handleRatingClick(messageId, button.dataset.rating, messageElement);
+      });
+    });
+    
+    // Load existing rating if any
+    loadExistingRating(messageId, messageElement);
+  }
+
+  // Handle rating button clicks
+  async function handleRatingClick(messageId, rating, messageElement) {
+    const currentRating = messageElement.querySelector('.chatbot-rating-btn.active')?.dataset.rating;
+    
+    // If clicking the same rating, remove it
+    if (currentRating === rating) {
+      await clearRating(messageId, messageElement);
+      return;
+    }
+    
+    // If thumbs up, show comment modal
+    if (rating === 'thumbs_up') {
+      showCommentModal(messageId, rating, messageElement);
+    } else {
+      // Thumbs down - save immediately without comment
+      await saveRating(messageId, rating, null, messageElement);
+    }
+  }
+
+  // Show comment modal for thumbs up
+  function showCommentModal(messageId, rating, messageElement) {
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'chatbot-comment-modal';
+    modal.innerHTML = `
+      <div class="chatbot-comment-content">
+        <h4>Thanks for the positive feedback!</h4>
+        <textarea class="chatbot-comment-textarea" placeholder="Tell us what you liked (optional)..."></textarea>
+        <div class="chatbot-comment-actions">
+          <button class="chatbot-comment-btn chatbot-comment-save">Save</button>
+          <button class="chatbot-comment-btn chatbot-comment-skip">Skip</button>
+        </div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Focus textarea
+    const textarea = modal.querySelector('.chatbot-comment-textarea');
+    setTimeout(() => textarea.focus(), 100);
+    
+    // Event listeners
+    modal.querySelector('.chatbot-comment-save').addEventListener('click', async () => {
+      const comment = textarea.value.trim();
+      await saveRating(messageId, rating, comment || null, messageElement);
+      document.body.removeChild(modal);
+    });
+    
+    modal.querySelector('.chatbot-comment-skip').addEventListener('click', async () => {
+      await saveRating(messageId, rating, null, messageElement);
+      document.body.removeChild(modal);
+    });
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
+    
+    // Close on Escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal);
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  }
+
+  // Save rating to backend
+  async function saveRating(messageId, rating, comment, messageElement) {
+    try {
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/messages/${messageId}/rating`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment })
+      });
+      
+      if (response.ok) {
+        updateRatingUI(messageElement, rating, comment);
+        showRatingFeedback(messageElement, rating);
+      } else {
+        console.error('Failed to save rating:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to save rating:', error);
+    }
+  }
+
+  // Clear rating from backend
+  async function clearRating(messageId, messageElement) {
+    try {
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/messages/${messageId}/rating`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        updateRatingUI(messageElement, null, null);
+      } else {
+        console.error('Failed to clear rating:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to clear rating:', error);
+    }
+  }
+
+  // Load existing rating from backend
+  async function loadExistingRating(messageId, messageElement) {
+    try {
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/messages/${messageId}/rating`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.rating) {
+          updateRatingUI(messageElement, data.rating, data.comment);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load existing rating:', error);
+    }
+  }
+
+  // Update rating UI
+  function updateRatingUI(messageElement, rating, comment) {
+    const ratingButtons = messageElement.querySelectorAll('.chatbot-rating-btn');
+    const statusElement = messageElement.querySelector('.chatbot-rating-status');
+    const statusText = messageElement.querySelector('.chatbot-rating-text');
+    
+    // Clear all active states
+    ratingButtons.forEach(btn => btn.classList.remove('active'));
+    
+    if (rating) {
+      // Set active state for the selected rating
+      const activeButton = messageElement.querySelector(`[data-rating="${rating}"]`);
+      if (activeButton) {
+        activeButton.classList.add('active');
+      }
+      
+      // Show status
+      if (statusElement && statusText) {
+        statusText.textContent = comment ? `${rating === 'thumbs_up' ? 'Helpful' : 'Not helpful'}: "${comment}"` : 
+                                          (rating === 'thumbs_up' ? 'Marked as helpful' : 'Marked as not helpful');
+        statusElement.className = `chatbot-rating-status ${rating === 'thumbs_up' ? 'positive' : 'negative'}`;
+        statusElement.style.display = 'block';
+      }
+    } else {
+      // Hide status
+      if (statusElement) {
+        statusElement.style.display = 'none';
+      }
+    }
+  }
+
+  // Show rating feedback
+  function showRatingFeedback(messageElement, rating) {
+    const statusElement = messageElement.querySelector('.chatbot-rating-status');
+    const statusText = messageElement.querySelector('.chatbot-rating-text');
+    
+    if (statusElement && statusText) {
+      const originalText = statusText.textContent;
+      statusText.textContent = rating === 'thumbs_up' ? 'Thanks!' : 'Thanks for the feedback!';
+      
+      // Reset after 2 seconds
+      setTimeout(() => {
+        statusText.textContent = originalText;
+      }, 2000);
     }
   }
 

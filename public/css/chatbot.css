@@ -1091,6 +1091,193 @@
   box-sizing: border-box;
 }
 
+/* Message rating styles */
+.chatbot-message-actions {
+  margin-top: 8px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.chatbot-widget-message.bot:hover .chatbot-message-actions {
+  opacity: 1;
+}
+
+.chatbot-rating-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.chatbot-rating-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 4px 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 24px;
+  color: #64748b;
+}
+
+.chatbot-rating-btn:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  transform: scale(1.05);
+}
+
+.chatbot-rating-btn.active.thumbs-up {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #16a34a;
+}
+
+.chatbot-rating-btn.active.thumbs-down {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.chatbot-rating-status {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.chatbot-rating-status.positive {
+  color: #16a34a;
+}
+
+.chatbot-rating-status.negative {
+  color: #dc2626;
+}
+
+/* Comment modal styles */
+.chatbot-comment-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: calc(var(--chatbot-z-index, 10000) + 10);
+  animation: chatbot-modal-fadeIn 0.2s ease-out;
+}
+
+@keyframes chatbot-modal-fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.chatbot-comment-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: chatbot-modal-slideIn 0.3s ease-out;
+}
+
+@keyframes chatbot-modal-slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chatbot-comment-content h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chatbot-comment-content h4::before {
+  content: '👍';
+  font-size: 18px;
+}
+
+.chatbot-comment-textarea {
+  width: 100%;
+  min-height: 80px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.chatbot-comment-textarea:focus {
+  border-color: var(--chatbot-primary-color, #4F46E5);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+.chatbot-comment-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.chatbot-comment-btn {
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.chatbot-comment-save {
+  background: var(--chatbot-primary-color, #4F46E5);
+  color: white;
+}
+
+.chatbot-comment-save:hover {
+  background: #4338ca;
+  transform: translateY(-1px);
+}
+
+.chatbot-comment-skip {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.chatbot-comment-skip:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
 /* Mobile responsiveness */
 @media (max-width: 480px) {
   .chatbot-widget-window.view-bubble {
@@ -1172,5 +1359,41 @@
   
   .chatbot-metabase-text {
     font-size: 12px;
+  }
+  
+  /* Mobile adjustments for rating buttons */
+  .chatbot-message-actions {
+    opacity: 1 !important; /* Always show on mobile */
+  }
+  
+  /* Also show on desktop for testing */
+  .chatbot-message-actions {
+    opacity: 1 !important;
+  }
+  
+  .chatbot-rating-btn {
+    min-width: 28px;
+    height: 22px;
+    font-size: 12px;
+    padding: 2px 6px;
+  }
+  
+  .chatbot-comment-content {
+    padding: 20px;
+    margin: 20px;
+  }
+  
+  .chatbot-comment-content h4 {
+    font-size: 15px;
+  }
+  
+  .chatbot-comment-textarea {
+    min-height: 70px;
+    font-size: 13px;
+  }
+  
+  .chatbot-comment-btn {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 }

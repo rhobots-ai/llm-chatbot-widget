@@ -50,6 +50,7 @@ class ConversationManager {
    * @param {string} message - Message text
    * @param {string} sender - Message sender ('user' or 'bot')
    * @param {Object} metadata - Additional message metadata
+   * @returns {number} - Message ID
    */
   async addMessage(conversationId, message, sender, metadata = {}) {
     await this.ensureInitialized();
@@ -60,13 +61,15 @@ class ConversationManager {
       throw new Error('Conversation not found');
     }
 
-    await database.addMessage(conversationId, message, sender, metadata);
+    const messageId = await database.addMessage(conversationId, message, sender, metadata);
     
     // Auto-generate conversation name from first user message if not already named
     if (sender === 'user' && !conversation.name && conversation.message_count === 0) {
       const generatedName = database.generateConversationName(message);
       await database.updateConversationName(conversationId, generatedName);
     }
+    
+    return messageId;
   }
 
   /**
