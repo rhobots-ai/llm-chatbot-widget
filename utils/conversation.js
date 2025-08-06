@@ -50,9 +50,10 @@ class ConversationManager {
    * @param {string} message - Message text
    * @param {string} sender - Message sender ('user' or 'bot')
    * @param {Object} metadata - Additional message metadata
+   * @param {Object} tokenData - Token usage data
    * @returns {number} - Message ID
    */
-  async addMessage(conversationId, message, sender, metadata = {}) {
+  async addMessage(conversationId, message, sender, metadata = {}, tokenData = null) {
     await this.ensureInitialized();
     
     // Check if conversation exists
@@ -61,7 +62,14 @@ class ConversationManager {
       throw new Error('Conversation not found');
     }
 
-    const messageId = await database.addMessage(conversationId, message, sender, metadata);
+    let messageId;
+    
+    // Use token-aware method if token data is provided
+    if (tokenData) {
+      messageId = await database.addMessageWithTokens(conversationId, message, sender, metadata, tokenData);
+    } else {
+      messageId = await database.addMessage(conversationId, message, sender, metadata);
+    }
     
     // Auto-generate conversation name from first user message if not already named
     if (sender === 'user' && !conversation.name && conversation.message_count === 0) {
@@ -70,6 +78,19 @@ class ConversationManager {
     }
     
     return messageId;
+  }
+
+  /**
+   * Add message with token data to conversation
+   * @param {string} conversationId - Conversation ID
+   * @param {string} message - Message text
+   * @param {string} sender - Message sender ('user' or 'bot')
+   * @param {Object} metadata - Additional message metadata
+   * @param {Object} tokenData - Token usage data
+   * @returns {number} - Message ID
+   */
+  async addMessageWithTokens(conversationId, message, sender, metadata = {}, tokenData = {}) {
+    return await this.addMessage(conversationId, message, sender, metadata, tokenData);
   }
 
   /**

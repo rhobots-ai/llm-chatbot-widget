@@ -9,6 +9,8 @@ const assistantsConfig = require('./config/assistants.json');
 const providerFactory = require('./providers');
 const conversationManager = require('./utils/conversation');
 const { validateChatRequest, createErrorResponse } = require('./utils/validation');
+const tokenCounter = require('./utils/token-counter');
+const database = require('./utils/database');
 
 // Import SQL API components
 const postgresManager = require('./utils/postgres');
@@ -813,8 +815,22 @@ app.post('/api/chat', async (req, res) => {
       currentConversationId = await conversationManager.createConversation(req.ip, metadata);
     }
 
-    // Add user message to conversation
-    await conversationManager.addMessage(currentConversationId, message, 'user');
+    // Count input tokens for user message
+    const inputTokens = tokenCounter.countTokens(message, 'gpt-4'); // Default model for counting
+
+    // Add user message to conversation with token data
+    const userMessageId = await conversationManager.addMessageWithTokens(
+      currentConversationId, 
+      message, 
+      'user', 
+      {}, 
+      {
+        inputTokens: inputTokens,
+        outputTokens: 0,
+        modelName: 'user-input',
+        cost: 0
+      }
+    );
 
     // Get provider configuration
     let providerConfig;
@@ -842,17 +858,37 @@ app.post('/api/chat', async (req, res) => {
       threadId: existingThreadId
     });
 
-    // Extract response message and thread ID
+    // Extract response message, thread ID, and token usage
     const responseMessage = typeof response === 'string' ? response : response.message;
     const responseThreadId = typeof response === 'object' ? response.threadId : null;
+    const tokenUsage = typeof response === 'object' ? response.tokenUsage : null;
 
     // Map conversation to thread if we got a new thread ID
     if (responseThreadId && !existingThreadId) {
       await conversationManager.mapToThread(currentConversationId, responseThreadId);
     }
 
-    // Add bot response to conversation and get message ID
-    const messageId = await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
+    // Add bot response to conversation with token data
+    const messageId = await conversationManager.addMessageWithTokens(
+      currentConversationId, 
+      responseMessage, 
+      'bot', 
+      {}, 
+      tokenUsage ? {
+        inputTokens: tokenUsage.inputTokens || 0,
+        outputTokens: tokenUsage.outputTokens || 0,
+        modelName: tokenUsage.modelName || 'gpt-4',
+        cost: tokenUsage.cost || 0
+      } : {
+        inputTokens: 0,
+        outputTokens: tokenCounter.countTokens(responseMessage, 'gpt-4'),
+        modelName: 'gpt-4',
+        cost: 0
+      }
+    );
+
+    // Get conversation token usage for response
+    const conversationUsage = await database.getConversationTokenUsage(currentConversationId);
 
     // Send response in the format expected by the widget
     res.json({
@@ -861,7 +897,15 @@ app.post('/api/chat', async (req, res) => {
       conversationId: currentConversationId,
       threadId: responseThreadId || existingThreadId,
       provider: finalProvider,
-      assistantId: finalAssistantId
+      assistantId: finalAssistantId,
+      tokenUsage: tokenUsage,
+      usage: {
+        totalInputTokens: conversationUsage.total_input_tokens || 0,
+        totalOutputTokens: conversationUsage.total_output_tokens || 0,
+        totalTokens: (conversationUsage.total_input_tokens || 0) + (conversationUsage.total_output_tokens || 0),
+        totalCost: conversationUsage.total_cost || 0,
+        modelName: conversationUsage.model_name
+      }
     });
 
   } catch (error) {
@@ -971,8 +1015,22 @@ async function handleStreamingChat(req, res) {
       currentConversationId = await conversationManager.createConversation(req.ip, metadata);
     }
 
-    // Add user message to conversation
-    await conversationManager.addMessage(currentConversationId, message, 'user');
+    // Count input tokens for user message
+    const inputTokens = tokenCounter.countTokens(message, 'gpt-4'); // Default model for counting
+
+    // Add user message to conversation with token data
+    await conversationManager.addMessageWithTokens(
+      currentConversationId, 
+      message, 
+      'user', 
+      {}, 
+      {
+        inputTokens: inputTokens,
+        outputTokens: 0,
+        modelName: 'user-input',
+        cost: 0
+      }
+    );
 
     // Get provider configuration
     let providerConfig;
@@ -1011,17 +1069,37 @@ async function handleStreamingChat(req, res) {
       }
     });
 
-    // Extract response message and thread ID
+    // Extract response message, thread ID, and token usage
     const responseMessage = typeof response === 'string' ? response : response.message;
     const responseThreadId = typeof response === 'object' ? response.threadId : null;
+    const tokenUsage = typeof response === 'object' ? response.tokenUsage : null;
 
     // Map conversation to thread if we got a new thread ID
     if (responseThreadId && !existingThreadId) {
       await conversationManager.mapToThread(currentConversationId, responseThreadId);
     }
 
-    // Add bot response to conversation and get message ID
-    const messageId = await conversationManager.addMessage(currentConversationId, responseMessage, 'bot');
+    // Add bot response to conversation with token data
+    const messageId = await conversationManager.addMessageWithTokens(
+      currentConversationId, 
+      responseMessage, 
+      'bot', 
+      {}, 
+      tokenUsage ? {
+        inputTokens: tokenUsage.inputTokens || 0,
+        outputTokens: tokenUsage.outputTokens || 0,
+        modelName: tokenUsage.modelName || 'gpt-4',
+        cost: tokenUsage.cost || 0
+      } : {
+        inputTokens: 0,
+        outputTokens: tokenCounter.countTokens(responseMessage, 'gpt-4'),
+        modelName: 'gpt-4',
+        cost: 0
+      }
+    );
+
+    // Get conversation token usage for response
+    const conversationUsage = await database.getConversationTokenUsage(currentConversationId);
 
     // Send final completion event
     if (!res.destroyed) {
@@ -1031,7 +1109,14 @@ async function handleStreamingChat(req, res) {
         messageId: messageId,
         threadId: responseThreadId || existingThreadId,
         provider: finalProvider,
-        assistantId: finalAssistantId
+        assistantId: finalAssistantId,
+        usage: {
+          totalInputTokens: conversationUsage.total_input_tokens || 0,
+          totalOutputTokens: conversationUsage.total_output_tokens || 0,
+          totalTokens: (conversationUsage.total_input_tokens || 0) + (conversationUsage.total_output_tokens || 0),
+          totalCost: conversationUsage.total_cost || 0,
+          modelName: conversationUsage.model_name
+        }
       }) + '\n\n');
       res.end();
     }
@@ -1097,6 +1182,9 @@ app.get('/api/conversations/:id', async (req, res) => {
       return res.status(404).json(createErrorResponse('Conversation not found'));
     }
 
+    // Get token usage for this conversation
+    const usage = await database.getConversationTokenUsage(req.params.id);
+
     res.json({
       id: conversation.id,
       name: conversation.name,
@@ -1109,7 +1197,17 @@ app.get('/api/conversations/:id', async (req, res) => {
       lastActivity: conversation.last_activity,
       messageCount: conversation.message_count,
       metadata: conversation.metadata,
-      messages: conversation.messages
+      messages: conversation.messages,
+      usage: {
+        totalInputTokens: usage.total_input_tokens || 0,
+        totalOutputTokens: usage.total_output_tokens || 0,
+        totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+        totalCost: usage.total_cost || 0,
+        modelName: usage.model_name,
+        formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+        formattedCost: tokenCounter.formatCost(usage.total_cost || 0),
+        modelDisplayName: tokenCounter.getModelDisplayName(usage.model_name)
+      }
     });
   } catch (error) {
     console.error('Get Conversation Error:', error);
@@ -1126,19 +1224,37 @@ app.get('/api/users/:userId/conversations', async (req, res) => {
 
     const conversations = await conversationManager.getUserConversations(userId, limit, offset);
     
+    // Get usage data for each conversation
+    const conversationsWithUsage = await Promise.all(
+      conversations.map(async (conv) => {
+        const usage = await database.getConversationTokenUsage(conv.id);
+        return {
+          id: conv.id,
+          name: conv.name || 'Untitled Conversation',
+          threadId: conv.thread_id,
+          provider: conv.provider,
+          assistantType: conv.assistant_type,
+          created: conv.created_at,
+          lastActivity: conv.last_activity,
+          messageCount: conv.message_count,
+          metadata: conv.metadata,
+          metabaseQuestionUrl: conv.metabase_question_url,
+          usage: {
+            totalInputTokens: usage.total_input_tokens || 0,
+            totalOutputTokens: usage.total_output_tokens || 0,
+            totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+            totalCost: usage.total_cost || 0,
+            modelName: usage.model_name,
+            formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+            formattedCost: tokenCounter.formatCost(usage.total_cost || 0),
+            modelDisplayName: tokenCounter.getModelDisplayName(usage.model_name)
+          }
+        };
+      })
+    );
+    
     res.json({
-      conversations: conversations.map(conv => ({
-        id: conv.id,
-        name: conv.name || 'Untitled Conversation',
-        threadId: conv.thread_id,
-        provider: conv.provider,
-        assistantType: conv.assistant_type,
-        created: conv.created_at,
-        lastActivity: conv.last_activity,
-        messageCount: conv.message_count,
-        metadata: conv.metadata,
-        metabaseQuestionUrl: conv.metabase_question_url
-      })),
+      conversations: conversationsWithUsage,
       pagination: {
         limit,
         offset,
@@ -1201,6 +1317,9 @@ app.get('/api/threads/:threadId/conversation', async (req, res) => {
     // Get full conversation with messages
     const fullConversation = await conversationManager.getConversationWithMessages(conversation.id);
     
+    // Get token usage for this conversation
+    const usage = await database.getConversationTokenUsage(conversation.id);
+    
     res.json({
       id: fullConversation.id,
       name: fullConversation.name,
@@ -1213,7 +1332,17 @@ app.get('/api/threads/:threadId/conversation', async (req, res) => {
       lastActivity: fullConversation.last_activity,
       messageCount: fullConversation.message_count,
       metadata: fullConversation.metadata,
-      messages: fullConversation.messages
+      messages: fullConversation.messages,
+      usage: {
+        totalInputTokens: usage.total_input_tokens || 0,
+        totalOutputTokens: usage.total_output_tokens || 0,
+        totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+        totalCost: usage.total_cost || 0,
+        modelName: usage.model_name,
+        formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+        formattedCost: tokenCounter.formatCost(usage.total_cost || 0),
+        modelDisplayName: tokenCounter.getModelDisplayName(usage.model_name)
+      }
     });
   } catch (error) {
     console.error('Get Conversation by Thread Error:', error);
@@ -1321,6 +1450,100 @@ app.delete('/api/messages/:messageId/rating', async (req, res) => {
   } catch (error) {
     console.error('Clear Message Rating Error:', error);
     res.status(500).json(createErrorResponse('Failed to clear message rating'));
+  }
+});
+
+// Token usage endpoints
+
+// Get conversation token usage
+app.get('/api/conversations/:id/usage', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if conversation exists
+    const conversation = await conversationManager.getConversation(id);
+    if (!conversation) {
+      return res.status(404).json(createErrorResponse('Conversation not found'));
+    }
+
+    // Get token usage
+    const usage = await database.getConversationTokenUsage(id);
+    
+    res.json({
+      conversationId: id,
+      totalInputTokens: usage.total_input_tokens || 0,
+      totalOutputTokens: usage.total_output_tokens || 0,
+      totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+      totalCost: usage.total_cost || 0,
+      modelName: usage.model_name,
+      formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+      formattedCost: tokenCounter.formatCost(usage.total_cost || 0),
+      modelDisplayName: tokenCounter.getModelDisplayName(usage.model_name)
+    });
+
+  } catch (error) {
+    console.error('Get Conversation Usage Error:', error);
+    res.status(500).json(createErrorResponse('Failed to get conversation usage'));
+  }
+});
+
+// Get user token usage statistics
+app.get('/api/users/:userId/usage', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const timeframe = req.query.timeframe ? parseInt(req.query.timeframe) : null;
+
+    // Get user token usage
+    const usage = await database.getUserTokenUsage(userId, timeframe);
+    
+    res.json({
+      userId: userId,
+      timeframe: timeframe,
+      totalInputTokens: usage.total_input_tokens || 0,
+      totalOutputTokens: usage.total_output_tokens || 0,
+      totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+      totalCost: usage.total_cost || 0,
+      conversationCount: usage.conversation_count || 0,
+      formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+      formattedCost: tokenCounter.formatCost(usage.total_cost || 0)
+    });
+
+  } catch (error) {
+    console.error('Get User Usage Error:', error);
+    res.status(500).json(createErrorResponse('Failed to get user usage'));
+  }
+});
+
+// Get token usage by model
+app.get('/api/usage/by-model', async (req, res) => {
+  try {
+    const userId = req.query.userId || null;
+    const timeframe = req.query.timeframe ? parseInt(req.query.timeframe) : null;
+
+    // Get usage by model
+    const usageByModel = await database.getTokenUsageByModel(userId, timeframe);
+    
+    const formattedUsage = usageByModel.map(usage => ({
+      modelName: usage.model_name,
+      modelDisplayName: tokenCounter.getModelDisplayName(usage.model_name),
+      totalInputTokens: usage.total_input_tokens || 0,
+      totalOutputTokens: usage.total_output_tokens || 0,
+      totalTokens: (usage.total_input_tokens || 0) + (usage.total_output_tokens || 0),
+      totalCost: usage.total_cost || 0,
+      conversationCount: usage.conversation_count || 0,
+      formattedTokens: tokenCounter.formatTokenCount((usage.total_input_tokens || 0) + (usage.total_output_tokens || 0)),
+      formattedCost: tokenCounter.formatCost(usage.total_cost || 0)
+    }));
+
+    res.json({
+      userId: userId,
+      timeframe: timeframe,
+      models: formattedUsage
+    });
+
+  } catch (error) {
+    console.error('Get Usage by Model Error:', error);
+    res.status(500).json(createErrorResponse('Failed to get usage by model'));
   }
 });
 

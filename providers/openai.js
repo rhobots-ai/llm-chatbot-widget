@@ -1,5 +1,6 @@
 const OpenAI = require('openai');
 const BaseProvider = require('./base-provider');
+const tokenCounter = require('../utils/token-counter');
 
 class OpenAIProvider extends BaseProvider {
   constructor(config) {
@@ -41,6 +42,13 @@ class OpenAIProvider extends BaseProvider {
     }
 
     try {
+      // Get assistant details to determine model
+      const assistant = await this.client.beta.assistants.retrieve(assistantId);
+      const modelName = assistant.model || 'gpt-4';
+
+      // Count input tokens
+      const inputTokens = tokenCounter.countTokens(message, modelName);
+
       // Get or create thread
       let threadId = options.threadId;
       if (!threadId) {
@@ -103,6 +111,25 @@ class OpenAIProvider extends BaseProvider {
         throw new Error('No text content in assistant response');
       }
 
+      const responseMessage = textContent.text.value;
+
+      // Extract real usage data from the run object, fallback to tiktoken
+      let actualInputTokens = inputTokens;
+      let actualOutputTokens = tokenCounter.countTokens(responseMessage, modelName);
+      let actualTotalTokens = actualInputTokens + actualOutputTokens;
+
+      if (runStatus.usage) {
+        console.log('✅ Using real token usage from OpenAI API:', runStatus.usage);
+        actualInputTokens = runStatus.usage.prompt_tokens || inputTokens;
+        actualOutputTokens = runStatus.usage.completion_tokens || tokenCounter.countTokens(responseMessage, modelName);
+        actualTotalTokens = runStatus.usage.total_tokens || (actualInputTokens + actualOutputTokens);
+      } else {
+        console.log('⚠️ No usage data in API response, using tiktoken fallback');
+      }
+
+      // Calculate cost using actual token counts
+      const cost = tokenCounter.calculateCost(actualInputTokens, actualOutputTokens, modelName);
+
       // Store thread ID for future use
       this.threads.set(threadId, {
         id: threadId,
@@ -111,8 +138,20 @@ class OpenAIProvider extends BaseProvider {
       });
 
       return {
-        message: textContent.text.value,
-        threadId: threadId
+        message: responseMessage,
+        threadId: threadId,
+        tokenUsage: {
+          inputTokens: actualInputTokens,
+          outputTokens: actualOutputTokens,
+          totalTokens: actualTotalTokens,
+          modelName,
+          cost,
+          // Include additional usage details if available
+          ...(runStatus.usage && {
+            cachedTokens: runStatus.usage.prompt_token_details?.cached_tokens,
+            reasoningTokens: runStatus.usage.completion_tokens_details?.reasoning_tokens
+          })
+        }
       };
 
     } catch (error) {
@@ -132,6 +171,13 @@ class OpenAIProvider extends BaseProvider {
     }
 
     try {
+      // Get assistant details to determine model
+      const assistant = await this.client.beta.assistants.retrieve(assistantId);
+      const modelName = assistant.model || 'gpt-4';
+
+      // Count input tokens
+      const inputTokens = tokenCounter.countTokens(message, modelName);
+
       // Get or create thread
       let threadId = options.threadId;
       if (!threadId) {
@@ -161,6 +207,7 @@ class OpenAIProvider extends BaseProvider {
       let finalMessage = '';
       let currentMessageId = null;
       let runId = null;
+      let streamUsageData = null;
 
       // Process streaming events
       for await (const event of stream) {
@@ -224,7 +271,12 @@ class OpenAIProvider extends BaseProvider {
               break;
 
             case 'thread.run.completed':
-              // Run is complete
+              // Run is complete - capture usage data if available
+              if (event.data.usage) {
+                streamUsageData = event.data.usage;
+                console.log('✅ Captured usage data from streaming run:', streamUsageData);
+              }
+              
               if (onProgress) {
                 onProgress({
                   type: 'progress',
@@ -281,6 +333,23 @@ class OpenAIProvider extends BaseProvider {
         throw new Error('No assistant response received');
       }
 
+      // Extract real usage data from streaming, fallback to tiktoken
+      let actualInputTokens = inputTokens;
+      let actualOutputTokens = tokenCounter.countTokens(finalMessage, modelName);
+      let actualTotalTokens = actualInputTokens + actualOutputTokens;
+
+      if (streamUsageData) {
+        console.log('✅ Using real token usage from streaming API:', streamUsageData);
+        actualInputTokens = streamUsageData.prompt_tokens || inputTokens;
+        actualOutputTokens = streamUsageData.completion_tokens || tokenCounter.countTokens(finalMessage, modelName);
+        actualTotalTokens = streamUsageData.total_tokens || (actualInputTokens + actualOutputTokens);
+      } else {
+        console.log('⚠️ No usage data in streaming response, using tiktoken fallback');
+      }
+
+      // Calculate cost using actual token counts
+      const cost = tokenCounter.calculateCost(actualInputTokens, actualOutputTokens, modelName);
+
       // Store thread ID for future use
       this.threads.set(threadId, {
         id: threadId,
@@ -299,7 +368,19 @@ class OpenAIProvider extends BaseProvider {
 
       return {
         message: finalMessage,
-        threadId: threadId
+        threadId: threadId,
+        tokenUsage: {
+          inputTokens: actualInputTokens,
+          outputTokens: actualOutputTokens,
+          totalTokens: actualTotalTokens,
+          modelName,
+          cost,
+          // Include additional usage details if available
+          ...(streamUsageData && {
+            cachedTokens: streamUsageData.prompt_token_details?.cached_tokens,
+            reasoningTokens: streamUsageData.completion_tokens_details?.reasoning_tokens
+          })
+        }
       };
 
     } catch (error) {

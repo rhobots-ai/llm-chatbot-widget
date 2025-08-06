@@ -53,6 +53,11 @@
   let currentThreadId = null; // Track current thread ID
   let isTyping = false;
   let showingHistory = false;
+  let conversationUsage = {
+    totalTokens: 0,
+    totalCost: 0,
+    modelName: null
+  };
 
   // SQL Auto-execution state
   let sqlRetryState = new Map(); // Track retry attempts per query
@@ -1461,6 +1466,65 @@
         color: #374151;
       }
 
+      /* Token usage status styles - Sticky note appearance */
+      .chatbot-token-status {
+        margin: 8px 0;
+        display: flex;
+        justify-content: center;
+        position: relative;
+      }
+
+      .chatbot-token-status-content {
+        background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+        border: 1px solid #f59e0b;
+        border-radius: 4px;
+        padding: 8px 12px;
+        font-size: 11px;
+        color: #92400e;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        position: relative;
+        box-shadow: 
+          0 2px 4px rgba(245, 158, 11, 0.1),
+          0 1px 2px rgba(245, 158, 11, 0.2);
+        transform: rotate(-1deg);
+        transition: all 0.3s ease;
+        font-family: 'Comic Sans MS', cursive, sans-serif;
+        border-left: 3px solid #f59e0b;
+      }
+
+      .chatbot-token-status-content:hover {
+        transform: rotate(0deg) scale(1.02);
+        box-shadow: 
+          0 4px 8px rgba(245, 158, 11, 0.15),
+          0 2px 4px rgba(245, 158, 11, 0.25);
+      }
+
+      .chatbot-token-status-content::before {
+        content: '';
+        position: absolute;
+        top: -2px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 20px;
+        height: 8px;
+        background: linear-gradient(135deg, #fbbf24, #f59e0b);
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 1px 2px rgba(245, 158, 11, 0.3);
+      }
+
+      .chatbot-token-info {
+        font-weight: 600;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+      }
+
+      .chatbot-model-info {
+        color: #a16207;
+        font-weight: 500;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+      }
+
       /* Mobile responsiveness */
       @media (max-width: 480px) {
         .chatbot-widget-window.view-bubble {
@@ -1859,6 +1923,11 @@
                         currentThreadId = data.threadId;
                       }
                       
+                      // Update token usage display
+                      if (data.usage) {
+                        updateTokenUsage(data.usage);
+                      }
+                      
                       // Add rating buttons to streaming message if we have messageId
                       if (streamingMessageElement && data.messageId) {
                         streamingMessageElement.setAttribute('data-message-id', data.messageId);
@@ -1953,6 +2022,11 @@
       // Store conversation ID from response
       if (data.conversationId) {
         currentConversationId = data.conversationId;
+      }
+
+      // Update token usage display
+      if (data.usage) {
+        updateTokenUsage(data.usage);
       }
       
       // Add bot response
@@ -3196,8 +3270,8 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
     
     try {
       // Get user ID (using IP as user identifier for now)
-      const userId = '::ffff:127.0.0.1';
-      // const userId = '::1';
+      // const userId = '::ffff:127.0.0.1';
+      const userId = '::1';
       
       // Fetch conversations from backend
       const apiBaseUrl = config.apiUrl.replace('/chat', '');
@@ -3351,6 +3425,10 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
         
         messagesContainer.appendChild(messageElement);
       });
+
+      if (conversation.usage) {
+        updateTokenUsage(conversation.usage)
+      }
       
       // Switch back to chat view
       showChatView();
@@ -3385,6 +3463,10 @@ Please provide a corrected version of this query. This is attempt ${attempt} of 
       currentConversationId = conversation.id;
       currentThreadId = conversation.threadId;
       messageHistory = conversation.messages || [];
+
+      if (conversation.usage) {
+        updateTokenUsage(conversation.usage)
+      }
       
       // Clear and rebuild messages container
       messagesContainer.innerHTML = '';
@@ -3729,6 +3811,100 @@ ${metabaseQuestionData.query}
       
       addMessage('❌ Failed to copy share link. Please try again.', 'bot');
     }
+  }
+
+  // Update token usage display
+  function updateTokenUsage(usage) {
+    if (usage && (usage.totalTokens > 0 || usage.totalCost > 0)) {
+      // Update conversation usage state
+      conversationUsage.totalTokens = usage.totalTokens || 0;
+      conversationUsage.totalCost = usage.totalCost || 0;
+      conversationUsage.modelName = usage.modelName || null;
+
+      // Format token count and cost
+      const formattedTokens = formatTokenCount(conversationUsage.totalTokens);
+      const formattedCost = formatCost(conversationUsage.totalCost);
+      const modelDisplay = getModelDisplayName(conversationUsage.modelName);
+
+      // Create a small token usage status message
+      showTokenUsageStatus(formattedTokens, formattedCost, modelDisplay);
+    }
+  }
+
+  // Show token usage as a small status message
+  function showTokenUsageStatus(tokens, cost, model) {    
+    // Remove any existing token status
+    const existingStatus = messagesContainer.querySelector('.chatbot-token-status');
+    if (existingStatus) {
+      console.log('here')
+      existingStatus.remove();
+    }
+
+    // Create token usage status element
+    const statusElement = document.createElement('div');
+    statusElement.className = 'chatbot-token-status';
+    statusElement.innerHTML = `
+      <div class="chatbot-token-status-content">
+        <span class="chatbot-token-info">💬 Usage: ${tokens} tokens • ${cost}</span>
+        ${model ? `<span class="chatbot-model-info">🤖 ${model}</span>` : ''}
+      </div>
+    `;
+    
+    // Add to messages container
+    messagesContainer.appendChild(statusElement);
+    scrollToBottom();
+
+    // // Auto-hide after 5 seconds
+    // setTimeout(() => {
+    //   if (statusElement && statusElement.parentNode) {
+    //     statusElement.style.opacity = '0';
+    //     setTimeout(() => {
+    //       if (statusElement && statusElement.parentNode) {
+    //         statusElement.remove();
+    //       }
+    //     }, 300);
+    //   }
+    // }, 5000);
+  }
+
+  // Format token count for display
+  function formatTokenCount(tokens) {
+    if (tokens < 1000) {
+      return tokens.toString();
+    } else if (tokens < 1000000) {
+      return (tokens / 1000).toFixed(1) + 'K';
+    } else {
+      return (tokens / 1000000).toFixed(1) + 'M';
+    }
+  }
+
+  // Format cost for display
+  function formatCost(cost) {
+    if (cost < 0.01) {
+      return '<$0.01';
+    } else if (cost < 1) {
+      return '$' + cost.toFixed(3);
+    } else {
+      return '$' + cost.toFixed(2);
+    }
+  }
+
+  // Get model display name
+  function getModelDisplayName(modelName) {
+    if (!modelName) return null;
+    
+    const modelDisplayNames = {
+      'gpt-4': 'GPT-4',
+      'gpt-4-turbo': 'GPT-4 Turbo',
+      'gpt-4-turbo-preview': 'GPT-4 Turbo',
+      'gpt-4-0125-preview': 'GPT-4 Turbo',
+      'gpt-4-1106-preview': 'GPT-4 Turbo',
+      'gpt-3.5-turbo': 'GPT-3.5 Turbo',
+      'gpt-3.5-turbo-16k': 'GPT-3.5 Turbo 16K',
+      'user-input': 'User Input'
+    };
+    
+    return modelDisplayNames[modelName] || modelName;
   }
 
   // Update share button visibility
