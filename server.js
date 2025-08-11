@@ -1172,6 +1172,47 @@ app.get('/api/assistants', (req, res) => {
   }
 });
 
+// Get OpenAI assistants from API
+app.get('/api/assistants/openai', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    
+    // Check if OpenAI is configured
+    if (!config.openai.apiKey) {
+      return res.status(500).json(createErrorResponse(
+        'OpenAI not configured',
+        ['OpenAI API key is required'],
+        500
+      ));
+    }
+    
+    // Create OpenAI provider configuration
+    const providerConfig = {
+      apiKey: config.openai.apiKey,
+      defaultAssistantId: config.openai.defaultAssistantId
+    };
+
+    // Create provider instance
+    const openaiProvider = await providerFactory.createProvider('openai', providerConfig);
+
+    const assistants = await openaiProvider.listAssistants(limit);
+    
+    res.json({
+      assistants: assistants,
+      provider: 'openai',
+      total: assistants.length,
+      default: config.openai.defaultAssistantId
+    });
+  } catch (error) {
+    console.error('OpenAI Assistants API Error:', error);
+    res.status(500).json(createErrorResponse(
+      'Failed to fetch OpenAI assistants',
+      [error.message],
+      500
+    ));
+  }
+});
+
 // Conversation management endpoints
 
 // Get conversation with full message history

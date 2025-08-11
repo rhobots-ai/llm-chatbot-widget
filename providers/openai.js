@@ -199,6 +199,7 @@ class OpenAIProvider extends BaseProvider {
       }
 
       // Create streaming run
+      console.log(`Creating streaming run for assistant ${assistantId} in thread ${threadId}`);
       const stream = await this.client.beta.threads.runs.create(threadId, {
         assistant_id: assistantId,
         stream: true
@@ -436,6 +437,32 @@ class OpenAIProvider extends BaseProvider {
     } catch (error) {
       console.error('Failed to delete thread:', error);
       return false;
+    }
+  }
+
+  async listAssistants(limit = 20) {
+    if (!this.client) {
+      throw new Error('OpenAI provider not initialized');
+    }
+
+    try {
+      const response = await this.client.beta.assistants.list({
+        order: 'desc',
+        limit: limit
+      });
+      
+      return response.data.map(assistant => ({
+        id: assistant.id,
+        name: assistant.name || 'Untitled Assistant',
+        description: assistant.description || '',
+        instructions: assistant.instructions || '',
+        model: assistant.model,
+        tools: assistant.tools,
+        created_at: assistant.created_at
+      }));
+    } catch (error) {
+      console.error('Failed to list OpenAI assistants:', error);
+      throw new Error(`Failed to list assistants: ${error.message}`);
     }
   }
 

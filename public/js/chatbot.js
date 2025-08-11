@@ -61,6 +61,11 @@
     modelName: null
   };
 
+  // Assistant selection state
+  let selectedAssistantId = null; // Currently selected assistant ID
+  let availableAssistants = []; // Cache of available assistants
+  let assistantsLoaded = false;
+
   // SQL Auto-execution state
   let sqlRetryState = new Map(); // Track retry attempts per query
   let isProcessingSQLQueries = false; // Prevent concurrent SQL processing
@@ -1496,6 +1501,167 @@
         color: #374151;
       }
 
+      /* Settings modal styles */
+      .chatbot-settings-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: calc(var(--chatbot-z-index, 10000) + 10);
+        animation: chatbot-modal-fadeIn 0.2s ease-out;
+      }
+
+      .chatbot-settings-content {
+        background: white;
+        border-radius: 12px;
+        padding: 24px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        animation: chatbot-modal-slideIn 0.3s ease-out;
+        max-height: 80vh;
+        overflow-y: auto;
+      }
+
+      .chatbot-settings-content h4 {
+        margin: 0 0 20px 0;
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .chatbot-settings-section {
+        margin-bottom: 24px;
+      }
+
+      .chatbot-settings-section h5 {
+        margin: 0 0 12px 0;
+        font-size: 14px;
+        font-weight: 600;
+        color: #374151;
+      }
+
+      .chatbot-assistant-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 8px;
+      }
+
+      .chatbot-assistant-option {
+        padding: 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        background: white;
+      }
+
+      .chatbot-assistant-option:hover {
+        background: #f8fafc;
+        border-color: var(--chatbot-primary-color, #4F46E5);
+      }
+
+      .chatbot-assistant-option.selected {
+        background: #f0f9ff;
+        border-color: var(--chatbot-primary-color, #4F46E5);
+        border-width: 2px;
+      }
+
+      .chatbot-assistant-name {
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 4px;
+        font-size: 14px;
+      }
+
+      .chatbot-assistant-id {
+        font-size: 11px;
+        color: #6b7280;
+        font-family: monospace;
+        margin-bottom: 4px;
+      }
+
+      .chatbot-assistant-model {
+        font-size: 12px;
+        color: #059669;
+        font-weight: 500;
+      }
+
+      .chatbot-assistant-description {
+        font-size: 12px;
+        color: #6b7280;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+
+      .chatbot-settings-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: flex-end;
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid #e2e8f0;
+      }
+
+      .chatbot-settings-btn {
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+      }
+
+      .chatbot-settings-save {
+        background: var(--chatbot-primary-color, #4F46E5);
+        color: white;
+      }
+
+      .chatbot-settings-save:hover {
+        background: #4338ca;
+        transform: translateY(-1px);
+      }
+
+      .chatbot-settings-cancel {
+        background: #f3f4f6;
+        color: #6b7280;
+      }
+
+      .chatbot-settings-cancel:hover {
+        background: #e5e7eb;
+        color: #374151;
+      }
+
+      .chatbot-settings-loading {
+        text-align: center;
+        padding: 40px;
+        color: #6b7280;
+      }
+
+      .chatbot-settings-error {
+        background: #fef2f2;
+        border: 1px solid #fecaca;
+        color: #991b1b;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        margin-bottom: 16px;
+      }
+
       /* Token usage status styles - Sticky note appearance */
       .chatbot-token-status {
         margin: 8px 0;
@@ -1725,6 +1891,11 @@
               <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/>
             </svg>
           </button>
+          <button class="chatbot-widget-header-btn" id="chatbot-settings" title="Settings">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+            </svg>
+          </button>
           <button class="chatbot-widget-header-btn" id="chatbot-toggle-view" title="Toggle View">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
@@ -1759,6 +1930,7 @@
     chatWindow.querySelector('#chatbot-new-conversation').addEventListener('click', startNewConversation);
     chatWindow.querySelector('#chatbot-show-history').addEventListener('click', toggleHistoryView);
     chatWindow.querySelector('#chatbot-share-conversation').addEventListener('click', shareConversation);
+    chatWindow.querySelector('#chatbot-settings').addEventListener('click', showSettings);
     chatWindow.querySelector('#chatbot-toggle-view').addEventListener('click', toggleView);
 
     // Initialize toggle button icon
@@ -1854,6 +2026,11 @@
       // Include threadId if we have one
       if (currentThreadId) {
         requestBody.threadId = currentThreadId;
+      }
+
+      // Include selected assistant ID if available
+      if (selectedAssistantId) {
+        requestBody.assistantId = selectedAssistantId;
       }
 
       // Include Metabase question URL if we have one and this is a new conversation
@@ -2038,6 +2215,11 @@
       // Include threadId if we have one
       if (currentThreadId) {
         requestBody.threadId = currentThreadId;
+      }
+
+      // Include selected assistant ID if available
+      if (selectedAssistantId) {
+        requestBody.assistantId = selectedAssistantId;
       }
 
       // Send to API
@@ -4225,12 +4407,218 @@ ${metabaseQuestionData.query}
       // Initialize Metabase integration
       await initializeMetabaseIntegration();
       
+      // Load selected assistant from localStorage
+      loadSelectedAssistant();
+      
     } catch (error) {
       console.error('Failed to initialize chatbot widget:', error);
       // Still try to create the widget with fallback
       createChatBubble();
       createChatWindow();
     }
+  }
+
+  // ===== ASSISTANT SETTINGS FUNCTIONS =====
+
+  // Load selected assistant from localStorage
+  function loadSelectedAssistant() {
+    try {
+      const saved = localStorage.getItem('chatbot-selected-assistant');
+      if (saved) {
+        selectedAssistantId = saved;
+      }
+    } catch (error) {
+      console.warn('Failed to load selected assistant from localStorage:', error);
+    }
+  }
+
+  // Save selected assistant to localStorage
+  function saveSelectedAssistant(assistantId) {
+    try {
+      if (assistantId) {
+        localStorage.setItem('chatbot-selected-assistant', assistantId);
+        selectedAssistantId = assistantId;
+      } else {
+        localStorage.removeItem('chatbot-selected-assistant');
+        selectedAssistantId = null;
+      }
+    } catch (error) {
+      console.warn('Failed to save selected assistant to localStorage:', error);
+    }
+  }
+
+  // Fetch available assistants from API
+  async function fetchAvailableAssistants() {
+    try {
+      const apiBaseUrl = config.apiUrl.replace('/chat', '');
+      const response = await fetch(`${apiBaseUrl}/assistants/openai`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      availableAssistants = data.assistants || [];
+      assistantsLoaded = true;
+      
+      return availableAssistants;
+    } catch (error) {
+      console.error('Failed to fetch available assistants:', error);
+      throw error;
+    }
+  }
+
+  // Show settings modal
+  async function showSettings() {
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'chatbot-settings-modal';
+    
+    // Show loading state initially
+    modal.innerHTML = `
+      <div class="chatbot-settings-content">
+        <h4>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+          </svg>
+          Settings
+        </h4>
+        <div class="chatbot-settings-loading">Loading assistants...</div>
+      </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    try {
+      // Fetch assistants if not already loaded
+      if (!assistantsLoaded) {
+        await fetchAvailableAssistants();
+      }
+      
+      // Render settings content
+      renderSettingsContent(modal);
+      
+    } catch (error) {
+      console.error('Failed to load settings:', error);
+      const content = modal.querySelector('.chatbot-settings-content');
+      content.innerHTML = `
+        <h4>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+          </svg>
+          Settings
+        </h4>
+        <div class="chatbot-settings-error">
+          Failed to load assistants: ${error.message}
+        </div>
+        <div class="chatbot-settings-actions">
+          <button class="chatbot-settings-btn chatbot-settings-cancel">Close</button>
+        </div>
+      `;
+      
+      // Add close event listener
+      const closeBtn = modal.querySelector('.chatbot-settings-cancel');
+      closeBtn.addEventListener('click', () => {
+        modal.remove();
+      });
+    }
+    
+    // Add click outside to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
+
+  // Render settings content
+  function renderSettingsContent(modal) {
+    const content = modal.querySelector('.chatbot-settings-content');
+    
+    let assistantOptionsHtml = '';
+    
+    if (availableAssistants.length === 0) {
+      assistantOptionsHtml = '<div class="chatbot-settings-error">No assistants found</div>';
+    } else {
+      availableAssistants.forEach(assistant => {
+        const isSelected = selectedAssistantId === assistant.id;
+        const truncatedDescription = assistant.description.length > 100 
+          ? assistant.description.substring(0, 100) + '...'
+          : assistant.description;
+        
+        assistantOptionsHtml += `
+          <div class="chatbot-assistant-option ${isSelected ? 'selected' : ''}" data-assistant-id="${assistant.id}">
+            <div class="chatbot-assistant-name">${assistant.name}</div>
+            <div class="chatbot-assistant-id">${assistant.id}</div>
+            <div class="chatbot-assistant-model">Model: ${assistant.model}</div>
+            ${assistant.description ? `<div class="chatbot-assistant-description">${truncatedDescription}</div>` : ''}
+          </div>
+        `;
+      });
+    }
+    
+    content.innerHTML = `
+      <h4>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+        </svg>
+        Settings
+      </h4>
+      <div class="chatbot-settings-section">
+        <h5>Select OpenAI Assistant</h5>
+        <div class="chatbot-assistant-grid">
+          ${assistantOptionsHtml}
+        </div>
+      </div>
+      <div class="chatbot-settings-actions">
+        <button class="chatbot-settings-btn chatbot-settings-save">Save</button>
+        <button class="chatbot-settings-btn chatbot-settings-cancel">Cancel</button>
+      </div>
+    `;
+    
+    // Add event listeners
+    setupSettingsEventListeners(modal);
+  }
+
+  // Setup event listeners for settings modal
+  function setupSettingsEventListeners(modal) {
+    let tempSelectedAssistantId = selectedAssistantId;
+    
+    // Assistant selection
+    const assistantOptions = modal.querySelectorAll('.chatbot-assistant-option');
+    assistantOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        // Remove selected class from all options
+        assistantOptions.forEach(opt => opt.classList.remove('selected'));
+        
+        // Add selected class to clicked option
+        option.classList.add('selected');
+        
+        // Update temporary selection
+        tempSelectedAssistantId = option.getAttribute('data-assistant-id');
+      });
+    });
+    
+    // Save button
+    const saveBtn = modal.querySelector('.chatbot-settings-save');
+    saveBtn.addEventListener('click', () => {
+      // Save the selection
+      saveSelectedAssistant(tempSelectedAssistantId);
+      
+      // Show feedback
+      saveBtn.textContent = 'Saved!';
+      saveBtn.style.background = '#10b981';
+      
+      setTimeout(() => {
+        modal.remove();
+      }, 1000);
+    });
+    
+    // Cancel button
+    const cancelBtn = modal.querySelector('.chatbot-settings-cancel');
+    cancelBtn.addEventListener('click', () => {
+      modal.remove();
+    });
   }
 
   // Public API
