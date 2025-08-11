@@ -408,6 +408,24 @@
         border-radius: 4px;
       }
 
+      .chatbot-widget-title-container {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .chatbot-widget-title {
+        font-weight: 600;
+        font-size: 14px;
+      }
+
+      .chatbot-widget-assistant-name {
+        font-size: 11px;
+        opacity: 0.8;
+        font-weight: 400;
+        color: rgba(255, 255, 255, 0.9);
+      }
+
       .chatbot-widget-header-actions {
         display: flex;
         align-items: center;
@@ -1721,6 +1739,19 @@
         text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
       }
 
+      .chatbot-assistant-separator {
+        margin: 0 6px;
+        color: #a16207;
+        opacity: 0.7;
+      }
+
+      .chatbot-assistant-name-token {
+        color: #7c3aed;
+        font-weight: 500;
+        font-size: 10px;
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.3);
+      }
+
       /* Mobile responsiveness */
       @media (max-width: 480px) {
         .chatbot-widget-window.view-bubble {
@@ -1873,7 +1904,10 @@
       <div class="chatbot-widget-header">
         <div class="chatbot-widget-header-content">
           <img src="${config.icon}" alt="Chat Icon" class="chatbot-widget-header-icon" />
-          <span>${config.title}</span>
+          <div class="chatbot-widget-title-container">
+            <span class="chatbot-widget-title">${config.title}</span>
+            <span class="chatbot-widget-assistant-name" style="display: none;"></span>
+          </div>
         </div>
         <div class="chatbot-widget-header-actions">
           <button class="chatbot-widget-header-btn" id="chatbot-new-conversation" title="New Conversation">
@@ -1959,6 +1993,9 @@
       setTimeout(() => {
         updatePasteButtonVisibility();
       }, 100);
+      
+      // Update assistant name display in header
+      updateAssistantDisplay();
       
       messageInput.focus();
       scrollToBottom();
@@ -4107,6 +4144,7 @@ ${metabaseQuestionData.query}
           <div class="chatbot-model-section">
             <span class="chatbot-model-icon">🤖</span>
             <span class="chatbot-model-name">${model}</span>
+            ${getSelectedAssistantName() ? `<span class="chatbot-assistant-separator">•</span><span class="chatbot-assistant-name-token">${getSelectedAssistantName()}</span>` : ''}
           </div>
         ` : ''}
       </div>
@@ -4410,6 +4448,15 @@ ${metabaseQuestionData.query}
       // Load selected assistant from localStorage
       loadSelectedAssistant();
       
+      // Try to fetch assistants to get names for display
+      try {
+        await fetchAvailableAssistants();
+      } catch (error) {
+        console.warn('Failed to load available assistants for display:', error);
+        // Still update display with what we have
+        updateAssistantDisplay();
+      }
+      
     } catch (error) {
       console.error('Failed to initialize chatbot widget:', error);
       // Still try to create the widget with fallback
@@ -4438,12 +4485,49 @@ ${metabaseQuestionData.query}
       if (assistantId) {
         localStorage.setItem('chatbot-selected-assistant', assistantId);
         selectedAssistantId = assistantId;
+        // Update UI to show the new assistant name
+        updateAssistantDisplay();
       } else {
         localStorage.removeItem('chatbot-selected-assistant');
         selectedAssistantId = null;
+        updateAssistantDisplay();
       }
     } catch (error) {
       console.warn('Failed to save selected assistant to localStorage:', error);
+    }
+  }
+
+  // Get selected assistant name for display
+  function getSelectedAssistantName() {
+    if (!selectedAssistantId) {
+      return null;
+    }
+    
+    // Find the assistant in the available assistants list
+    const assistant = availableAssistants.find(a => a.id === selectedAssistantId);
+    return assistant ? assistant.name : selectedAssistantId.substring(0, 12) + '...'; // Fallback to truncated ID
+  }
+
+  // Update assistant display in header and token usage
+  function updateAssistantDisplay() {
+    // Update header
+    updateHeaderAssistantName();
+    // Token usage will be updated next time it's shown
+  }
+
+  // Update header to show selected assistant name
+  function updateHeaderAssistantName() {
+    if (!chatWindow) return;
+    
+    const assistantNameElement = chatWindow.querySelector('.chatbot-widget-assistant-name');
+    if (!assistantNameElement) return;
+    
+    const assistantName = getSelectedAssistantName();
+    if (assistantName) {
+      assistantNameElement.textContent = `Using: ${assistantName}`;
+      assistantNameElement.style.display = 'block';
+    } else {
+      assistantNameElement.style.display = 'none';
     }
   }
 
@@ -4460,6 +4544,9 @@ ${metabaseQuestionData.query}
       const data = await response.json();
       availableAssistants = data.assistants || [];
       assistantsLoaded = true;
+      
+      // Update assistant display now that we have the assistant names
+      updateAssistantDisplay();
       
       return availableAssistants;
     } catch (error) {
